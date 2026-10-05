@@ -1,1 +1,31 @@
-# mi-dibero
+# :root{--bg:#f4f6f8;--c:#fff;--t:#16202a;--m:#6b7785;--p:#0f9d75;--g:#16a34a;--r:#ef4444;--b:#e5e9ee;--sh:0 2px 10px #0001}
+@media(prefers-color-scheme:dark){:root:not([data-t=light]){--bg:#0e141a;--c:#18212a;--t:#eef2f6;--m:#8a98a6;--b:#2a3642;--sh:none}}
+:root[data-t=dark]{--bg:#0e141a;--c:#18212a;--t:#eef2f6;--m:#8a98a6;--b:#2a3642;--sh:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t);padding-top:env(safe-area-inset-top)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px 6px;max-width:640px;margin:auto}
+h1{font-size:24px;margin:0}h2{font-size:18px;margin:18px 0 8px}h3{margin:6px 0 10px;font-size:18px}
+main{padding:6px 16px 160px;max-width:640px;margin:auto}.fade{animation:f .3s ease}@keyframes f{from{opacity:0;transform:translateY(8px)}}
+.card{background:var(--c);border-radius:18px;padding:14px 16px;margin:0 0 12px;box-shadow:var(--sh);display:block;transition:transform .15s}.card:active{transform:scale(.99)}
+.hero{background:linear-gradient(135deg,var(--p),#0b6e8f);color:#fff;border-radius:22px;padding:22px;margin-bottom:12px}.hero b{font-size:36px;display:block;margin-top:4px}
+small{color:var(--m);display:block;font-size:12.5px}.hero small{color:#ffffffcc}b{font-size:17px}.g{color:var(--g)}.r{color:var(--r)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.grid .card{margin:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px;margin-bottom:10px}.fl{flex:1;min-width:0}.fl small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom);z-index:3}
+nav button{flex:1;border:0;background:none;color:var(--m);padding:8px 0 10px;font-size:11px;transition:.2s}nav span{display:block;font-size:22px}nav .on{color:var(--p);font-weight:700}
+#fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:62px;height:62px;border-radius:31px;border:0;background:var(--p);color:#fff;font-size:32px;box-shadow:0 6px 18px #0004;transition:.2s;z-index:3}#fab:active{transform:scale(.9)}
+#bd{position:fixed;inset:0;background:#0007;opacity:0;pointer-events:none;transition:.25s;z-index:4}
+#sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:var(--c);border-radius:24px 24px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);max-width:640px;margin:auto;z-index:5}
+.open #bd{opacity:1;pointer-events:auto}.open #sheet{transform:none}
+input,select{width:100%;font-size:16px;padding:14px;border-radius:14px;border:1px solid var(--b);background:var(--bg);color:var(--t);margin-bottom:8px;font-family:inherit}
+label{font-size:13px;color:var(--m);display:block;margin:8px 0 4px}.big{font-size:28px;font-weight:700;text-align:center}
+.btn{width:100%;padding:16px;border:0;border-radius:16px;background:var(--p);color:#fff;font-size:17px;font-weight:600;margin-top:10px;transition:.15s}.btn:active{transform:scale(.97)}
+.btn.sec{background:var(--bg);color:var(--t);border:1px solid var(--b)}.btn.del{background:#ef444422;color:var(--r)}
+.seg{display:flex;gap:6px;background:var(--bg);padding:4px;border-radius:14px}.seg button{flex:1;padding:12px 2px;border:0;border-radius:11px;background:none;color:var(--t);font-size:14px;transition:.2s}.seg .on{background:var(--p);color:#fff}
+.bar{height:10px;background:var(--b);border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;border-radius:6px;transition:width .6s}
+.dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:#ef444422;color:var(--r);flex:none}.dot.ingreso{background:#16a34a22;color:var(--g)}.dot.transferencia{background:#3b82f622;color:#3b82f6}
+.ic{background:var(--c);border:1px solid var(--b);color:var(--t);border-radius:12px;width:46px;height:46px;font-size:18px;flex:none;margin-bottom:8px}
+.chart{width:100%;height:auto}.chart text{fill:var(--m);font-size:11px}.leg{display:flex;gap:14px;font-size:12px;color:var(--m);margin:6px 0}
+.tap{margin-top:8px;text-align:right}
+mi-dibero
