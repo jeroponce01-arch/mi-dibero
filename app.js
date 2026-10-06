@@ -31,7 +31,7 @@ const leg='<div class="leg"><span style="color:var(--g)">● Ingresos</span><spa
 const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'ingreso'),b:sumM(m,'gasto')})))};
 const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc);
 return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(t.amount)}</b></div>`};
-let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',type:'',acc:''};const views={};
+let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',sub:'',type:'',acc:''};const views={};
 const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos e ingresos'],['invest','📈','Inversiones'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
 function render(){document.documentElement.dataset.t=S.theme=='auto'?'':S.theme;$('#ttl').textContent=S.name;document.title=S.name;
 $('#nav').innerHTML=TABS.map(([k,i,l])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><span>${i}</span>${l}</button>`).join('');
@@ -68,14 +68,17 @@ const o={id:id||uid(),type:T.type,amount:a,date:$('#f_d').value||today(),acc,to,
 if(id)S.tx[S.tx.findIndex(x=>x.id==id)]=o;else S.tx.push(o);save();closeSheet();render()}
 function delTx(id){if(confirm('¿Eliminar este movimiento?')){S.tx=S.tx.filter(x=>x.id!=id);save();closeSheet();render()}}
 
+function histSubs(sel=''){const c=S.cats.find(x=>x.id==F.cat);return '<option value="">Todas las subcategorías</option>'+(c?opt(c.subs,sel):'')}
+function hcat(v){F.cat=v;F.sub='';render()}
 views.hist=()=>`<div class="card"><input placeholder="🔍 Buscar..." value="${esc(F.q)}" oninput="F.q=this.value;hl()">
 <div class="two"><div><label>Desde</label><input type="date" value="${F.d1}" onchange="F.d1=this.value;hl()"></div><div><label>Hasta</label><input type="date" value="${F.d2}" onchange="F.d2=this.value;hl()"></div></div>
-<div class="two"><select onchange="F.cat=this.value;hl()"><option value="">Todas las categorías</option>${opt(S.cats,F.cat)}</select>
-<select onchange="F.type=this.value;hl()">${[['','Todos los tipos'],['gasto','Gastos'],['ingreso','Ingresos'],['transferencia','Transferencias']].map(([v,l])=>`<option value="${v}" ${F.type==v?'selected':''}>${l}</option>`).join('')}</select></div>
-<select onchange="F.acc=this.value;hl()"><option value="">Todas las cuentas</option>${opt(S.accounts,F.acc)}</select>
-<button class="btn sec" style="margin:0" onclick="F={q:'',d1:'',d2:'',cat:'',type:'',acc:''};render()">Limpiar filtros</button></div><div class="card" id="hl"></div>`;
+<div class="two"><select onchange="hcat(this.value)"><option value="">Todas las categorías</option>${opt(S.cats,F.cat)}</select>
+<select id="f_sub" ${F.cat?'':'disabled'} onchange="F.sub=this.value;hl()">${histSubs(F.sub)}</select></div>
+<div class="two"><select onchange="F.type=this.value;hl()">${[['','Todos los tipos'],['gasto','Gastos'],['ingreso','Ingresos'],['transferencia','Transferencias']].map(([v,l])=>`<option value="${v}" ${F.type==v?'selected':''}>${l}</option>`).join('')}</select>
+<select onchange="F.acc=this.value;hl()"><option value="">Todas las cuentas</option>${opt(S.accounts,F.acc)}</select></div>
+<button class="btn sec" style="margin:0" onclick="F={q:'',d1:'',d2:'',cat:'',sub:'',type:'',acc:''};render()">Limpiar filtros</button></div><div class="card" id="hl"></div>`;
 function hl(){const q=F.q.toLowerCase(),r=S.tx.filter(t=>{const c=S.cats.find(x=>x.id==t.cat);
-return(!F.d1||t.date>=F.d1)&&(!F.d2||t.date<=F.d2)&&(!F.cat||t.cat==F.cat)&&(!F.type||t.type==F.type)&&(!F.acc||t.acc==F.acc||t.to==F.acc)&&
+return(!F.d1||t.date>=F.d1)&&(!F.d2||t.date<=F.d2)&&(!F.cat||t.cat==F.cat)&&(!F.sub||t.sub==F.sub)&&(!F.type||t.type==F.type)&&(!F.acc||t.acc==F.acc||t.to==F.acc)&&
 (!q||[t.desc,c?.name,c?.subs.find(s=>s.id==t.sub)?.name,nm(S.accounts,t.acc),String(t.amount)].join(' ').toLowerCase().includes(q))}).sort((a,b)=>b.date.localeCompare(a.date));
 $('#hl').innerHTML=`<small style="margin-bottom:10px">${r.length} movimiento(s)</small>`+(r.map(txRow).join('')||'<small>No hay resultados.</small>')}
 
