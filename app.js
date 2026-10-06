@@ -248,7 +248,7 @@ if(isNew)S.cats.push(CE);else S.cats[S.cats.findIndex(c=>c.id==CE.id)]=CE;save()
 function delCat(){if(confirm('¿Eliminar categoría? Los movimientos quedarán "Sin categoría".')){S.cats=S.cats.filter(c=>c.id!=CE.id);save();closeSheet();render()}}
 function exp_(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='mi-dinero-'+today()+'.json';a.click()}
 function imp(e){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts||!d.cats||!d.tx)throw 0;
-if(confirm('Esto reemplaza todos tus datos actuales. ¿Continuar?')){S=d;mergeCats();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
+if(confirm('Esto reemplaza los datos de movimientos, cuentas y categorías. Las inversiones y metas actuales se conservarán si la copia no las contiene. ¿Continuar?')){const oldInv=Array.isArray(S.investments)?S.investments:[];const oldGoals=Array.isArray(S.goals)?S.goals:[];S={...def(),...d,investments:Array.isArray(d.investments)?d.investments:oldInv,goals:Array.isArray(d.goals)?d.goals:oldGoals};mergeCats();save();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
 function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();mergeCats();render()}}
 /* ===== Importar movimientos desde Excel (hoja AGENDA) ===== */
 const nz=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
@@ -298,7 +298,7 @@ ${A.size?`<small style="margin-bottom:8px">Se crearán cuentas nuevas (saldo ini
 ${sk.length?`<div class="card"><b class="r">No se importarán</b>${sk.map(s=>`<small>${esc(s)}</small>`).join('')}</div>`:''}
 <label style="display:flex;gap:12px;align-items:center;font-size:15px;color:var(--t)"><input type="checkbox" id="xd" checked style="width:24px;height:24px;margin:0">Evitar duplicados si ya importé este Excel</label>
 <button class="btn" onclick="xlsApply()">Importar ${o.items.length} movimientos</button><button class="btn sec" onclick="closeSheet()">Cancelar</button>`)}
-function xlsApply(){const dd=$('#xd').checked,have=new Set(S.tx.map(t=>t.key).filter(Boolean));let add=0,dup=0;
+function xlsApply(){if(!XI||!Array.isArray(XI.items))return alert('No hay datos de Excel para importar.');const dd=$('#xd').checked,have=new Set(S.tx.map(t=>t.key).filter(Boolean));let add=0,dup=0;
 const acc=n=>{let a=S.accounts.find(x=>nz(x.name)==nz(n));if(!a)S.accounts.push(a={id:uid(),name:n,ini:0});return a.id};
 for(const i of XI.items){if(dd&&have.has(i.key)){dup++;continue}let cat='',sub='';
 if(i.cat){let c=S.cats.find(x=>nz(x.name)==nz(i.cat));if(!c)S.cats.push(c={id:uid(),name:i.cat,subs:[],budget:0});cat=c.id;
