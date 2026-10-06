@@ -1,4 +1,4 @@
-const V='mi-dinero-v3',A=['./','index.html','styles.css','app.js','manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png'];
+const V='mi-dinero-v4',A=['./','index.html','styles.css','app.js','manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(A)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!=V).map(x=>caches.delete(x)))));self.clients.claim()});
 self.addEventListener('fetch',e=>{if(e.request.method!='GET')return;

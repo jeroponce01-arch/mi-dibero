@@ -4,7 +4,7 @@ const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOStr
 const mk0=()=>today().slice(0,7),fd=d=>d.split('-').reverse().join('/'),num=id=>Math.round(pnum($('#'+id).value)*100)/100;
 const def=()=>({name:'Mi Dinero',cur:'$',theme:'auto',budget:0,
 accounts:['Efectivo','Mercado Pago','Banco'].map((n,i)=>({id:'a'+i,name:n,ini:0})),
-cats:['Comida','Transporte','Salud','Entretenimiento','Compras','Servicios','Suscripciones','Ahorro','Otros'].map((n,i)=>({id:'c'+i,name:n,subs:[],budget:0})),tx:[],goals:[]});
+cats:[],tx:[],goals:[]});
 let S;try{S=JSON.parse(localStorage.getItem(K))||def()}catch(e){S=def()}
 const save=()=>localStorage.setItem(K,JSON.stringify(S));
 const f=n=>{const r=Math.round((+n||0)*100)/100,[i,d]=Math.abs(r).toFixed(2).split('.');return(r<0?'-':'')+S.cur+i.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+d};
@@ -31,7 +31,7 @@ const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'i
 const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc);
 return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(t.amount)}</b></div>`};
 let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',type:'',acc:''};const views={};
-const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
+const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
 function render(){document.documentElement.dataset.t=S.theme=='auto'?'':S.theme;$('#ttl').textContent=S.name;document.title=S.name;
 $('#nav').innerHTML=TABS.map(([k,i,l])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><span>${i}</span>${l}</button>`).join('');
 const m=$('#main');m.innerHTML=views[tab]();m.className='';void m.offsetWidth;m.className='fade';if(tab=='hist')hl()}
@@ -128,16 +128,16 @@ function saveAcc(id){const n=$('#a_n').value.trim();if(!n)return alert('Poné un
 function delAcc(id){if(S.tx.some(t=>t.acc==id||t.to==id))return alert('Esta cuenta tiene movimientos. Eliminá o editá esos movimientos primero.');if(confirm('¿Eliminar cuenta?')){S.accounts=S.accounts.filter(x=>x.id!=id);save();closeSheet();render()}}
 function iniForm(){sheet(`<h3>Saldo inicial</h3><small style="margin-bottom:8px">¿Cuánto dinero tenías en cada cuenta al empezar a usar la app?</small>${S.accounts.map(a=>`<label>${esc(a.name)}</label><input id="i_${a.id}" type="text" inputmode="decimal" value="${fi(a.ini)}">`).join('')}<button class="btn" onclick="S.accounts.forEach(a=>a.ini=num('i_'+a.id));save();closeSheet();render()">Guardar</button>`)}
 function catForm(id){CE=id?JSON.parse(JSON.stringify(S.cats.find(c=>c.id==id))):{id:uid(),name:'',subs:[],budget:0,isNew:1};drawCat()}
-function drawCat(){sheet(`<h3>${CE.isNew?'Nueva':'Editar'} categoría</h3><label>Nombre</label><input value="${esc(CE.name)}" oninput="CE.name=this.value"><label>Presupuesto mensual (opcional)</label><input type="text" inputmode="decimal" value="${fi(CE.budget)}" oninput="CE.budget=pnum(this.value)">
-<label>Subcategorías</label>${CE.subs.map((s,i)=>`<div class="row"><input style="margin:0" value="${esc(s.name)}" placeholder="Nombre" oninput="CE.subs[${i}].name=this.value"><button class="ic" style="margin:0" onclick="CE.subs.splice(${i},1);drawCat()">✕</button></div>`).join('')}
-<button class="btn sec" onclick="CE.subs.push({id:uid(),name:''});drawCat()">+ Agregar subcategoría</button><button class="btn" onclick="saveCat()">Guardar</button>${CE.isNew?'':'<button class="btn del" onclick="delCat()">Eliminar categoría</button>'}`)}
+function drawCat(){sheet(`<h3>${CE.isNew?'Nueva':'Editar'} categoría</h3><label>Nombre</label><input value="${esc(CE.name)}" ${CE.fixed?'readonly':''} oninput="CE.name=this.value"><label>Presupuesto mensual (opcional)</label><input type="text" inputmode="decimal" value="${fi(CE.budget)}" oninput="CE.budget=pnum(this.value)">
+<label>Subcategorías</label>${CE.subs.map((s,i)=>`<div class="row"><input style="margin:0" value="${esc(s.name)}" ${s.fixed?'readonly':''} placeholder="Nombre" oninput="CE.subs[${i}].name=this.value">${s.fixed?'':`<button class="ic" style="margin:0" onclick="CE.subs.splice(${i},1);drawCat()">✕</button>`}</div>`).join('')}
+<button class="btn sec" onclick="CE.subs.push({id:uid(),name:''});drawCat()">+ Agregar subcategoría</button><button class="btn" onclick="saveCat()">Guardar</button>${CE.fixed?'<small style="margin-top:10px">Categoría predeterminada: no se puede renombrar ni eliminar. Podés agregar subcategorías propias.</small>':''}${CE.isNew||CE.fixed?'':'<button class="btn sec" onclick="mvForm(\''+CE.id+'\')">Mover sus movimientos a otra categoría</button><button class="btn del" onclick="delCat()">Eliminar categoría</button>'}`)}
 function saveCat(){CE.name=CE.name.trim();if(!CE.name)return alert('Poné un nombre');CE.subs=CE.subs.filter(s=>s.name.trim());const isNew=CE.isNew;delete CE.isNew;
 if(isNew)S.cats.push(CE);else S.cats[S.cats.findIndex(c=>c.id==CE.id)]=CE;save();closeSheet();render()}
 function delCat(){if(confirm('¿Eliminar categoría? Los movimientos quedarán "Sin categoría".')){S.cats=S.cats.filter(c=>c.id!=CE.id);save();closeSheet();render()}}
 function exp_(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='mi-dinero-'+today()+'.json';a.click()}
 function imp(e){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts||!d.cats||!d.tx)throw 0;
-if(confirm('Esto reemplaza todos tus datos actuales. ¿Continuar?')){S=d;save();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
-function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();save();render()}}
+if(confirm('Esto reemplaza todos tus datos actuales. ¿Continuar?')){S=d;mergeCats();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
+function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();mergeCats();render()}}
 /* ===== Importar movimientos desde Excel (hoja AGENDA) ===== */
 const nz=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 let XI=null;
@@ -196,5 +196,52 @@ save();closeSheet();render();alert(`Se importaron ${add} movimientos.`+(dup?` Se
 async function xlsPick(e){const f=e.target.files[0];e.target.value='';if(!f)return;
 try{if(typeof DecompressionStream=='undefined')throw new Error('Tu navegador no puede leer Excel. Actualizá iOS/Safari.');xlsPreview(parseAgenda(await readSheet(await f.arrayBuffer(),'AGENDA')))}
 catch(x){alert(x.message&&x.message.length<200?x.message:'No pude leer el archivo. Tiene que ser un Excel .xlsx con una hoja llamada AGENDA.')}}
+
+/* ===== Catálogo fijo de categorías / subcategorías ===== */
+const CAT='Vivienda:Alquiler,Expensas,Luz,Gas,Agua,Internet,Teléfono,Reparaciones,Mantenimiento,Muebles,Electrodomésticos;Alimentación:Supermercado,Almacén,Carnicería,Verdulería,Panadería,Restaurantes,Delivery,Comida rápida,Bebidas,Otros alimentos;Transporte:Combustible,Transporte público,Taxi,Uber/Cabify,Mantenimiento del vehículo,Seguro,Estacionamiento,Peajes;Salud:Medicamentos,Farmacia,Consultas médicas,Estudios,Odontología,Óptica,Seguro médico,Otros gastos de salud;Higiene y cuidado personal:Peluquería,Barbería,Higiene,Cosmética,Perfumería,Ropa,Calzado,Accesorios;Entretenimiento:Cine,Series,Streaming,Videojuegos,Juegos,Salidas,Eventos,Música,Hobbies;Educación:Cursos,Libros,Materiales,Capacitación,Universidad/Instituto,Otros gastos educativos;Finanzas:Comisiones,Impuestos,Intereses,Préstamos,Tarjetas,Otros gastos financieros;Suscripciones:Streaming,Música,Aplicaciones,Gimnasio,Software,Otros;Hogar:Limpieza,Productos para el hogar,Decoración,Herramientas,Jardinería,Mascotas;Viajes:Pasajes,Hotel,Comida,Transporte,Excursiones,Otros;Trabajo:Herramientas,Indumentaria,Transporte,Comida,Materiales,Otros;Regalos y personales:Regalos,Donaciones,Familia,Otros;Ahorro:Ahorro,Fondo de emergencia,Objetivos;Inversiones:Dólares,Acciones,Bonos,Fondos,Criptomonedas,Otros;Otros:Otros gastos';
+const CATL=CAT.split(';').map(x=>{const[n,s]=x.split(':');return[n,s.split(',')]});
+function mergeCats(){CATL.forEach(([n,subs],i)=>{let c=S.cats.find(x=>nz(x.name)==nz(n));if(!c)S.cats.push(c={id:'k'+i,name:n,subs:[],budget:0});c.fixed=true;c.subs=c.subs||[];
+subs.forEach((s,j)=>{let u=c.subs.find(x=>nz(x.name)==nz(s));if(!u)c.subs.push(u={id:'k'+i+'_'+j,name:s});u.fixed=true});
+const si=u=>{const k=subs.findIndex(s=>nz(s)==nz(u.name));return u.fixed&&k>=0?k:99};c.subs.sort((p,q)=>si(p)-si(q))});
+const ci=c=>c.fixed?CATL.findIndex(x=>nz(x[0])==nz(c.name)):99;S.cats.sort((p,q)=>ci(p)-ci(q));save()}
+function mvForm(id){const t=S.tx.filter(x=>x.cat==id).length;sheet(`<h3>Mover movimientos</h3><small style="margin-bottom:8px">${t} movimiento(s) de “${esc(nm(S.cats,id))}” pasarán a la categoría que elijas. No se borra ningún movimiento.</small><label>Nueva categoría</label><select id="mv_c" onchange="mvSubs()"><option value="">Elegir…</option>${opt(S.cats.filter(c=>c.id!=id),'')}</select><label>Subcategoría (opcional)</label><select id="mv_s"><option value="">Sin subcategoría</option></select><button class="btn" onclick="mvDo('${id}')">Mover</button>`)}
+function mvSubs(){const c=S.cats.find(x=>x.id==$('#mv_c').value);$('#mv_s').innerHTML='<option value="">Sin subcategoría</option>'+(c?opt(c.subs,''):'')}
+function mvDo(id){const c=S.cats.find(x=>x.id==$('#mv_c').value);if(!c)return alert('Elegí una categoría');const old=S.cats.find(x=>x.id==id),s0=$('#mv_s').value;
+S.tx.forEach(t=>{if(t.cat!=id)return;const on=old?.subs.find(s=>s.id==t.sub)?.name,m=on&&c.subs.find(s=>nz(s.name)==nz(on));t.cat=c.id;t.sub=m?m.id:s0});save();closeSheet();render();alert('Movimientos movidos a '+c.name)}
+
+/* ===== Historial de gastos ===== */
+let G={y:'',m:'',c:'',s:'',o:'',a:'',b:''};
+const gset=(k,v)=>{G[k]=v;if(k=='c')G.s='';render()},gtog=id=>{G.o=G.o==id?'':id;render()},mlab=m=>MF[+m.slice(5)-1]+' '+m.slice(0,4),o2=(arr,cur)=>arr.map(([v,l])=>`<option value="${v}" ${v==cur?'selected':''}>${esc(l)}</option>`).join('');
+const gW=n=>`style="width:${n*40>320?n*40+'px':'100%'};max-width:none;height:auto"`,gL=(m)=>ml(m)+(G.y?'':"'"+m.slice(2,4));
+const gbars=(v,l,col)=>{const n=v.length,mx=Math.max(1,...v);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart">`+v.map((y,i)=>{const h=y/mx*105;return `<rect x="${i*40+8}" y="${120-h}" width="24" height="${h}" rx="4" fill="${col}"/><text x="${i*40+20}" y="138" text-anchor="middle" style="font-size:9px">${l[i]}</text>`}).join('')+`<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
+const gdual=(a,b,l)=>{const n=a.length,mx=Math.max(1,...a,...b);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart">`+a.map((y,i)=>{const h=y/mx*105,k=b[i]/mx*105;return `<rect x="${i*40+4}" y="${120-h}" width="15" height="${h}" rx="3" fill="var(--g)"/><rect x="${i*40+21}" y="${120-k}" width="15" height="${k}" rx="3" fill="var(--r)"/><text x="${i*40+20}" y="138" text-anchor="middle" style="font-size:9px">${l[i]}</text>`}).join('')+`<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
+const gline=(v,l)=>{const n=v.length,mx=Math.max(1,...v),p=v.map((y,i)=>[i*40+20,115-y/mx*95]);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart"><polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="var(--p)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${p.map((q,i)=>`<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="var(--p)"/><text x="${q[0]}" y="140" text-anchor="middle" style="font-size:9px">${l[i]}</text>`).join('')}<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
+views.gastos=()=>{const pd=d=>(!G.y||d.startsWith(G.y))&&(!G.m||d.slice(5,7)==G.m),sel=S.tx.filter(t=>pd(t.date)),gs=sel.filter(t=>t.type=='gasto'),sum=a=>a.reduce((x,t)=>x+t.amount,0),inc=sum(sel.filter(t=>t.type=='ingreso')),tot=sum(gs),
+ac=S.cats.find(c=>nz(c.name)=='ahorro'),sav=S.goals.flatMap(g=>g.hist||[]).filter(h=>pd(h.d)).reduce((x,h)=>x+h.a,0)+sum(gs.filter(t=>ac&&t.cat==ac.id)),big=gs.reduce((b,t)=>t.amount>(b?b.amount:0)?t:b,null),
+by={};gs.forEach(t=>{const o=by[t.cat]=by[t.cat]||{v:0,n:0,s:{}};o.v+=t.amount;o.n++;o.s[t.sub]=(o.s[t.sub]||0)+t.amount});const rows=Object.entries(by).sort((p,q)=>q[1].v-p[1].v),
+years=[...new Set([...S.tx.map(t=>t.date.slice(0,4)),...(G.y?[G.y]:[])])].sort(),
+lb=G.y&&G.m?MF[+G.m-1]+' '+G.y:G.y?'Año '+G.y:G.m?MF[+G.m-1]+' (todos los años)':'Historial completo',
+cn=id=>nm(S.cats,id)=='—'?'Sin categoría':nm(S.cats,id);
+const ok=t=>t.type=='gasto'&&(!G.c||t.cat==G.c)&&(!G.s||t.sub==G.s),sg={},si={},al=new Set();
+S.tx.forEach(t=>{if(t.type=='transferencia'||(G.y&&!t.date.startsWith(G.y)))return;const m=t.date.slice(0,7);al.add(m);if(t.type=='ingreso')si[m]=(si[m]||0)+t.amount;if(ok(t))sg[m]=(sg[m]||0)+t.amount});
+let M=[];if(G.y)for(let i=1;i<=12;i++)M.push(G.y+'-'+p2(i));else if(al.size){const k=[...al].sort();let[y,mo]=k[0].split('-').map(Number);for(;;){const x=y+'-'+p2(mo);M.push(x);if(x>=k[k.length-1])break;if(++mo>12){mo=1;y++}}}
+const vg=M.map(m=>sg[m]||0),vi=M.map(m=>si[m]||0),lab=M.map(gL),co=S.cats.find(c=>c.id==G.c);
+const allM=[...new Set(S.tx.filter(t=>t.type=='gasto').map(t=>t.date.slice(0,7)))].sort(),A=G.a||allM[allM.length-2]||allM[0]||'',B=G.b||allM[allM.length-1]||'',
+sp=m=>{const o={};S.tx.forEach(t=>{if(t.type=='gasto'&&t.date.startsWith(m))o[t.cat]=(o[t.cat]||0)+t.amount});return o},pa=sp(A),pb=sp(B),ta=Object.values(pa).reduce((x,v)=>x+v,0),tb=Object.values(pb).reduce((x,v)=>x+v,0),
+dc=[...new Set([...Object.keys(pa),...Object.keys(pb)])].map(c=>[c,(pa[c]||0),(pb[c]||0)]).sort((p,q)=>Math.abs(q[2]-q[1])-Math.abs(p[2]-p[1]));
+return `<h2 style="margin-top:4px">Historial de gastos</h2><div class="two"><div><label>Año</label><select onchange="gset('y',this.value)">${o2([['','Todos'],...years.map(y=>[y,y])],G.y)}</select></div><div><label>Mes</label><select onchange="gset('m',this.value)">${o2([['','Todos'],...MF.map((n,i)=>[p2(i+1),n])],G.m)}</select></div></div>
+<div class="hero"><small>Balance · ${lb}</small><b>${f(inc-tot)}</b><small>Ingresos − gastos (las transferencias no se cuentan)</small></div>
+<div class="grid"><div class="card"><small>Total gastado</small><b class="r">${f(tot)}</b></div><div class="card"><small>Total ingresado</small><b class="g">${f(inc)}</b></div><div class="card"><small>Total ahorrado</small><b>${f(sav)}</b></div><div class="card"><small>Cantidad de gastos</small><b>${gs.length}</b></div>
+<div class="card"><small>Promedio de gasto</small><b>${f(gs.length?tot/gs.length:0)}</b></div><div class="card"><small>Mayor gasto</small><b>${f(big?big.amount:0)}</b>${big?`<small>${esc(big.desc||cn(big.cat))} · ${fd(big.date)}</small>`:''}</div></div>
+<div class="card"><b>Gastos por categoría</b><small style="margin-bottom:6px">Tocá una categoría para ver sus subcategorías</small><div class="tb h"><span>Categoría</span><span>Total</span><span>%</span><span>Mov.</span></div>
+${rows.length?rows.map(([c,o],i)=>`<div onclick="gtog('${c}')"><div class="tb"><span>${esc(cn(c))} ${G.o==c?'▴':'▾'}</span><b style="font-size:14px">${f(o.v)}</b><span>${Math.round(o.v/tot*100)}%</span><span>${o.n}</span></div><div class="bar" style="margin:0 0 4px"><i style="width:${o.v/tot*100}%;background:${PAL[i%9]}"></i></div>${G.o==c?Object.entries(o.s).sort((p,q)=>q[1]-p[1]).map(([s,v])=>`<div class="sub"><span>${esc(nm((S.cats.find(x=>x.id==c)||{subs:[]}).subs,s)=='—'?'Sin subcategoría':nm(S.cats.find(x=>x.id==c).subs,s))}</span><span>${f(v)}</span></div>`).join(''):''}</div>`).join(''):'<small>Sin gastos en este período</small>'}</div>
+<h2>Evolución del gasto</h2><div class="card"><small style="margin-bottom:8px">Año: ${G.y||'todos'} (el selector de Mes no limita esta sección). Elegí una categoría o subcategoría para ver solo esos gastos.</small>
+<select onchange="gset('c',this.value)"><option value="">Todas las categorías</option>${opt(S.cats,G.c)}</select><select onchange="gset('s',this.value)"><option value="">Todas las subcategorías</option>${co?opt(co.subs,G.s):''}</select>
+<small>Total: <b>${f(vg.reduce((x,v)=>x+v,0))}</b></small></div>
+${M.length?`<div class="card"><b>Gastos por mes</b>${gbars(vg,lab,'var(--r)')}</div><div class="card"><b>Evolución a través del tiempo</b>${gline(vg,lab)}</div><div class="card"><b>Ingresos vs gastos</b>${leg}${gdual(vi,vg.map((v,i)=>v),lab)}<small>Los gastos siguen el filtro de categoría elegido.</small></div>
+<div class="card"><b>Mes por mes</b>${M.map((m,i)=>{const v=vg[i],p=i?vg[i-1]:0,dl=i&&p>0?Math.round((v-p)/p*100):0;return `<div class="row" style="margin:8px 0"><span class="fl">${mlab(m)}</span><b>${f(v)}</b><small style="width:58px;text-align:right" class="${dl>0?'r':'g'}">${dl?(dl>0?'▲ ':'▼ ')+Math.abs(dl)+'%':''}</small></div>`}).join('')}</div>`:'<div class="card"><small>Todavía no hay movimientos.</small></div>'}
+<h2>Comparar meses</h2><div class="card">${allM.length?`<div class="two"><select onchange="gset('a',this.value)">${o2(allM.slice().reverse().map(m=>[m,mlab(m)]),A)}</select><select onchange="gset('b',this.value)">${o2(allM.slice().reverse().map(m=>[m,mlab(m)]),B)}</select></div>
+<div class="two"><div><small>${mlab(A)}</small><b>${f(ta)}</b></div><div><small>${mlab(B)}</small><b>${f(tb)}</b></div></div><b class="${tb>ta?'r':'g'}">Diferencia: ${tb>ta?'+':''}${f(tb-ta)}${ta?' ('+(tb>=ta?'+':'')+Math.round((tb-ta)/ta*100)+'%)':''}</b>
+${dc.map(([c,x,y])=>`<div class="row" style="margin:8px 0"><span class="fl">${esc(cn(c))}<small>${f(x)} → ${f(y)}</small></span><b class="${y>x?'r':'g'}">${y>x?'+':''}${f(y-x)}</b></div>`).join('')}`:'<small>Sin gastos para comparar.</small>'}</div>`};
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));
-render();
+mergeCats();render();
