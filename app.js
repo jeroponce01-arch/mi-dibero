@@ -4,8 +4,9 @@ const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOStr
 const mk0=()=>today().slice(0,7),fd=d=>d.split('-').reverse().join('/'),num=id=>Math.round(pnum($('#'+id).value)*100)/100;
 const def=()=>({name:'Mi Dinero',cur:'$',theme:'auto',budget:0,
 accounts:['Efectivo','Mercado Pago','Banco'].map((n,i)=>({id:'a'+i,name:n,ini:0})),
-cats:[],tx:[],goals:[]});
+cats:[],tx:[],goals:[],investments:[]});
 let S;try{S=JSON.parse(localStorage.getItem(K))||def()}catch(e){S=def()}
+if(!Array.isArray(S.investments))S.investments=[];
 const save=()=>localStorage.setItem(K,JSON.stringify(S));
 const f=n=>{const r=Math.round((+n||0)*100)/100,[i,d]=Math.abs(r).toFixed(2).split('.');return(r<0?'-':'')+S.cur+i.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+d};
 const fi=n=>n?String(n).replace('.',','):'';
@@ -31,7 +32,7 @@ const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'i
 const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc);
 return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(t.amount)}</b></div>`};
 let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',type:'',acc:''};const views={};
-const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
+const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos'],['invest','📈','Inversiones'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
 function render(){document.documentElement.dataset.t=S.theme=='auto'?'':S.theme;$('#ttl').textContent=S.name;document.title=S.name;
 $('#nav').innerHTML=TABS.map(([k,i,l])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><span>${i}</span>${l}</button>`).join('');
 const m=$('#main');m.innerHTML=views[tab]();m.className='';void m.offsetWidth;m.className='fade';if(tab=='hist')hl()}
@@ -94,6 +95,117 @@ return `<div class="row"><button class="ic" onclick="shiftM(-1)" aria-label="Mes
 <div class="card"><b>Evolución del saldo</b>${line(L.map(x=>totBal(x+'-31')),L.map(ml))}</div>
 <div class="card"><b>Gastos de los últimos 6 meses</b>${L.slice().reverse().map((x,i)=>{const v=ex[5-i];return `<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${ml(x)} ${x.slice(0,4)}</span><b>${f(v)}</b></div><div class="bar"><i style="width:${v/mx*100}%;background:var(--r)"></i></div></div>`}).join('')}</div>
 <h2>Movimientos de ${lb}</h2><div class="card">${mt.length?mt.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(txRow).join(''):'<small>Sin movimientos en este período.</small>'}</div>`};
+
+
+/* ===== Inversiones ===== */
+const INV_TYPES=[
+  ['dolares','Dólares'],['plazo_fijo','Plazo fijo'],['fci','FCI'],
+  ['bonos','Bonos'],['on','Obligaciones negociables'],['cedears','CEDEARs'],
+  ['acciones','Acciones'],['crypto','Criptomonedas'],['letras','Letras'],['otros','Otros']
+];
+const invTypeName=t=>INV_TYPES.find(x=>x[0]==t)?.[1]||'Otros';
+const invValue=x=>x.status=='cerrada'?0:(+x.quantity||0)*(+x.currentPrice||0);
+const invCost=x=>+x.capital||0;
+const invIncome=x=>(+x.income||0);
+const invGain=x=>invValue(x)-invCost(x)+invIncome(x);
+const invPct=x=>invCost(x)?invGain(x)/invCost(x)*100:0;
+const invTotalCost=()=>S.investments.filter(x=>x.status!='cerrada').reduce((a,x)=>a+invCost(x),0);
+const invTotalValue=()=>S.investments.reduce((a,x)=>a+invValue(x),0);
+const invTotalIncome=()=>S.investments.reduce((a,x)=>a+invIncome(x),0);
+const invTotalGain=()=>S.investments.reduce((a,x)=>a+invGain(x),0);
+
+function invForm(id){
+  const x=id?S.investments.find(v=>v.id==id):{
+    name:'',type:'dolares',date:today(),capital:'',purchasePrice:'',quantity:'',
+    currentPrice:'',income:0,status:'abierta',notes:'',history:[]
+  };
+  sheet(`<h3>${id?'Editar inversión':'Nueva inversión'}</h3>
+<label>Nombre</label><input id="iv_n" value="${esc(x.name)}" placeholder="Ej.: Dólares, CEDEAR de...">
+<label>Tipo</label><select id="iv_t">${INV_TYPES.map(([v,l])=>`<option value="${v}" ${x.type==v?'selected':''}>${l}</option>`).join('')}</select>
+<label>Fecha de compra / inicio</label><input id="iv_d" type="date" value="${x.date||today()}">
+<label>Capital invertido</label><input id="iv_c" type="text" inputmode="decimal" value="${fi(x.capital)}" placeholder="0,00">
+<label>Precio de compra por unidad</label><input id="iv_pp" type="text" inputmode="decimal" value="${fi(x.purchasePrice)}" placeholder="0,00">
+<label>Cantidad</label><input id="iv_q" type="text" inputmode="decimal" value="${fi(x.quantity)}" placeholder="0,00">
+<label>Precio actual por unidad</label><input id="iv_cp" type="text" inputmode="decimal" value="${fi(x.currentPrice)}" placeholder="0,00">
+<label>Rendimientos cobrados (dividendos/intereses)</label><input id="iv_i" type="text" inputmode="decimal" value="${fi(x.income)}" placeholder="0,00">
+<label>Estado</label><select id="iv_st"><option value="abierta" ${x.status!='cerrada'?'selected':''}>Abierta</option><option value="cerrada" ${x.status=='cerrada'?'selected':''}>Cerrada</option></select>
+<label>Notas</label><input id="iv_no" value="${esc(x.notes||'')}" placeholder="Opcional">
+<button class="btn" onclick="saveInv('${id||''}')">Guardar inversión</button>
+${id?`<button class="btn del" onclick="delInv('${id}')">Eliminar inversión</button>`:''}`);
+}
+function saveInv(id){
+  const name=$('#iv_n').value.trim();
+  if(!name)return alert('Poné un nombre');
+  const o={
+    id:id||uid(),name,type:$('#iv_t').value,date:$('#iv_d').value||today(),
+    capital:num('iv_c'),purchasePrice:num('iv_pp'),quantity:num('iv_q'),
+    currentPrice:num('iv_cp'),income:num('iv_i'),status:$('#iv_st').value,
+    notes:$('#iv_no').value.trim(),history:id?(S.investments.find(x=>x.id==id)?.history||[]):[]
+  };
+  if(id)S.investments[S.investments.findIndex(x=>x.id==id)]=o;else{
+    o.history=[{d:o.date,action:'Alta',amount:o.capital}];
+    S.investments.push(o);
+  }
+  save();closeSheet();render();
+}
+function delInv(id){
+  if(confirm('¿Eliminar esta inversión?')){S.investments=S.investments.filter(x=>x.id!=id);save();closeSheet();render()}
+}
+function invIncomeForm(id){
+  const x=S.investments.find(v=>v.id==id);
+  numSheet('Registrar rendimiento de '+x.name,'',v=>{
+    x.income=(+x.income||0)+v;(x.history=x.history||[]).push({d:today(),action:'Rendimiento cobrado',amount:v});
+    save();render();
+  },'Monto cobrado');
+}
+function invClose(id){
+  const x=S.investments.find(v=>v.id==id);
+  if(confirm('¿Marcar esta inversión como cerrada? Su valor actual pasará a $0 en el cálculo de cartera.')){
+    x.status='cerrada';(x.history=x.history||[]).push({d:today(),action:'Cierre',amount:invValue(x)});
+    save();render();
+  }
+}
+views.invest=()=>{
+  const arr=S.investments||[],open=arr.filter(x=>x.status!='cerrada'),cost=invTotalCost(),val=invTotalValue(),inc=invTotalIncome(),gain=invTotalGain();
+  const by={};open.forEach(x=>by[x.type]=(by[x.type]||0)+invValue(x));
+  const groups=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  return `<div class="hero"><small>Patrimonio invertido actual</small><b>${f(val)}</b><small>Ganancia/pérdida estimada: ${gain>=0?'+':''}${f(gain)} (${cost?gain/cost*100:0|0}%)</small></div>
+<div class="grid">
+<div class="card"><small>Capital invertido</small><b>${f(cost)}</b></div>
+<div class="card"><small>Valor actual</small><b>${f(val)}</b></div>
+<div class="card"><small>Ganancia/pérdida</small><b class="${gain>=0?'g':'r'}">${gain>=0?'+':''}${f(gain)}</b></div>
+<div class="card"><small>Rendimientos cobrados</small><b>${f(inc)}</b></div></div>
+${groups.length?`<div class="card"><b>Distribución de cartera</b>${groups.map(([t,v])=>`<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${esc(invTypeName(t))}</span><b>${f(v)}</b><small>${val?Math.round(v/val*100):0}%</small></div>${bar(val?v/val*100:0)}</div>`).join('')}</div>`:''}
+<h2>Mis inversiones</h2>
+${arr.length?arr.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
+ const v=invValue(x),g=invGain(x),p=invPct(x);
+ return `<div class="card"><div class="row" style="margin:0"><div class="fl"><b>${esc(x.name)}</b><small>${esc(invTypeName(x.type))} · ${x.status=='cerrada'?'Cerrada':'Abierta'} · ${x.date?fd(x.date):''}</small></div><b class="${g>=0?'g':'r'}">${g>=0?'+':''}${f(g)}</b></div>
+ <div class="two" style="margin-top:10px"><div><small>Capital</small><b>${f(invCost(x))}</b></div><div><small>Valor actual</small><b>${f(v)}</b></div></div>
+ <small>Rendimiento: ${g>=0?'+':''}${p.toFixed(2).replace('.',',')}% · ${f(x.quantity)} unidades × ${f(x.currentPrice)}</small>
+ ${x.notes?`<small style="margin-top:5px">${esc(x.notes)}</small>`:''}
+ <div class="two" style="margin:10px 0 0"><button class="btn sec" style="margin:0" onclick="invForm('${x.id}')">Editar</button>${x.status!='cerrada'?`<button class="btn sec" style="margin:0" onclick="invIncomeForm('${x.id}')">Cobrar</button>`:''}</div>
+ ${x.status!='cerrada'?`<button class="btn sec" style="margin:0" onclick="invClose('${x.id}')">Marcar como cerrada</button>`:''}
+ </div>`}).join(''):'<div class="card"><small>Todavía no cargaste inversiones.</small></div>'}
+<button class="btn" onclick="invForm()">+ Nueva inversión</button>
+
+<h2>¿En qué invertir?</h2>
+<div class="card"><small>Esta sección es educativa. No garantiza rendimientos ni reemplaza asesoramiento financiero. El riesgo y el rendimiento real dependen del instrumento y del mercado.</small></div>
+${INV_TYPES.filter(x=>x[0]!='otros').map(([k,l])=>{
+ const info={
+ dolares:['Dólares','Exposición al dólar. Liquidez alta si se mantiene en una forma fácil de vender.','Riesgo: medio','Horizonte: corto a largo plazo.'],
+ plazo_fijo:['Plazo fijo','Depósito bancario con una tasa pactada por un período.','Riesgo: bajo/medio','Liquidez: depende de la modalidad y del banco.'],
+ fci:['FCI','Fondo que reúne dinero de varios inversores y lo coloca según su estrategia.','Riesgo: bajo a alto según el fondo','Liquidez: depende del fondo.'],
+ bonos:['Bonos','Instrumentos de deuda emitidos por gobiernos o empresas.','Riesgo: medio/alto según emisor y plazo','El precio puede subir o bajar antes del vencimiento.'],
+ on:['Obligaciones negociables','Deuda emitida por empresas.','Riesgo: medio/alto','Revisar emisor, vencimiento, tasa y liquidez.'],
+ cedears:['CEDEARs','Certificados que permiten tener exposición a acciones extranjeras desde Argentina.','Riesgo: medio/alto','El precio puede verse afectado por la acción y el tipo de cambio.'],
+ acciones:['Acciones','Participación en empresas cotizadas.','Riesgo: alto','Horizonte habitual: largo plazo.'],
+ crypto:['Criptomonedas','Activos digitales con variaciones de precio muy grandes.','Riesgo: muy alto','No usar dinero que no puedas asumir perder.'],
+ letras:['Letras','Instrumentos de deuda de corto plazo.','Riesgo: depende del emisor','Revisar vencimiento, rendimiento y liquidez.']
+ }[k]||['Instrumento','Informate sobre su funcionamiento, costos y riesgos.','Riesgo variable','Compará alternativas antes de invertir.'];
+ return `<div class="card"><b>${l}</b><small style="margin-top:5px">${info[0]}: ${info[1]}</small><small>${info[2]}</small><small>${info[3]}</small></div>`
+}).join('')}
+<div class="card"><b>Cómo evaluar una inversión</b><small style="margin-top:6px">1. Qué estás comprando.</small><small>2. Cuánto podés perder.</small><small>3. Cuándo podés necesitar el dinero.</small><small>4. Liquidez y costos.</small><small>5. Diversificación.</small><small>6. Rendimiento histórico, sin asumir que se repetirá.</small></div>`;
+};
 
 views.goals=()=>{const m=mk0(),exp=sumM(m,'gasto'),b=S.budget,p=b?Math.round(exp/b*100):0;
 return `<h2>Presupuesto del mes</h2><div class="card" onclick="numSheet('Presupuesto mensual',S.budget,v=>{S.budget=v;save();render()})"><div class="two"><div><small>Presupuesto</small><b>${f(b)}</b></div><div><small>Gastado</small><b class="r">${f(exp)}</b></div></div>
