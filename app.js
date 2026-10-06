@@ -1,17 +1,18 @@
 const $=s=>document.querySelector(s),K='mi-dinero-v1',uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
-const mk0=()=>today().slice(0,7),fd=d=>d.split('-').reverse().join('/'),num=id=>parseFloat(String($('#'+id).value).replace(',','.'))||0;
+const mk0=()=>today().slice(0,7),fd=d=>d.split('-').reverse().join('/'),num=id=>Math.round(pnum($('#'+id).value)*100)/100;
 const def=()=>({name:'Mi Dinero',cur:'$',theme:'auto',budget:0,
 accounts:['Efectivo','Mercado Pago','Banco'].map((n,i)=>({id:'a'+i,name:n,ini:0})),
 cats:['Comida','Transporte','Salud','Entretenimiento','Compras','Servicios','Suscripciones','Ahorro','Otros'].map((n,i)=>({id:'c'+i,name:n,subs:[],budget:0})),tx:[],goals:[]});
 let S;try{S=JSON.parse(localStorage.getItem(K))||def()}catch(e){S=def()}
 const save=()=>localStorage.setItem(K,JSON.stringify(S));
-const f=n=>(n<0?'-':'')+S.cur+Math.abs(n).toLocaleString('es-AR',{maximumFractionDigits:2});
+const f=n=>{const r=Math.round((+n||0)*100)/100,[i,d]=Math.abs(r).toFixed(2).split('.');return(r<0?'-':'')+S.cur+i.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+d};
+const fi=n=>n?String(n).replace('.',','):'';
 const nm=(a,id)=>a.find(x=>x.id==id)?.name||'—';
 const opt=(a,sel)=>a.map(o=>`<option value="${o.id}" ${o.id==sel?'selected':''}>${esc(o.name)}</option>`).join('');
 const MN=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],ml=m=>MN[+m.slice(5)-1];
-const last6=()=>{const d=new Date(),o=[];for(let i=5;i>=0;i--){const x=new Date(d.getFullYear(),d.getMonth()-i,1);o.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}return o};
+const last6=(e=mk0())=>{const[ey,em]=e.split('-').map(Number),o=[];for(let i=5;i>=0;i--){const x=new Date(ey,em-1-i,1);o.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}return o};
 const sumM=(m,t)=>S.tx.filter(x=>x.type==t&&x.date.startsWith(m)).reduce((a,x)=>a+x.amount,0);
 const catSpent=(c,m)=>S.tx.filter(x=>x.type=='gasto'&&x.cat==c&&x.date.startsWith(m)).reduce((a,x)=>a+x.amount,0);
 const savM=m=>{const ac=S.cats.find(c=>c.name.toLowerCase()=='ahorro');return S.goals.flatMap(g=>g.hist||[]).filter(h=>h.d.startsWith(m)).reduce((a,h)=>a+h.a,0)+(ac?catSpent(ac.id,m):0)};
@@ -26,7 +27,7 @@ return `<rect x="${X}" y="${120-ha}" width="18" height="${ha}" rx="4" fill="var(
 function line(v,l){const mn=Math.min(...v),r=(Math.max(...v)-mn)||1,p=v.map((y,i)=>[20+i*56,110-(y-mn)/r*90]);
 return `<svg viewBox="0 0 320 150" class="chart"><polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="var(--p)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${p.map((q,i)=>`<circle cx="${q[0]}" cy="${q[1]}" r="4" fill="var(--p)"/><text x="${q[0]}" y="140" text-anchor="middle">${l[i]}</text>`).join('')}</svg>`}
 const leg='<div class="leg"><span style="color:var(--g)">● Ingresos</span><span style="color:var(--r)">● Gastos</span></div>';
-const mchart=()=>{const L=last6();return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'ingreso'),b:sumM(m,'gasto')})))};
+const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'ingreso'),b:sumM(m,'gasto')})))};
 const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc);
 return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(t.amount)}</b></div>`};
 let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',type:'',acc:''};const views={};
@@ -37,7 +38,7 @@ const m=$('#main');m.innerHTML=views[tab]();m.className='';void m.offsetWidth;m.
 const go=k=>{tab=k;scrollTo(0,0);render()};
 function toggleTheme(){const d=matchMedia('(prefers-color-scheme: dark)').matches,cur=S.theme=='auto'?(d?'dark':'light'):S.theme;S.theme=cur=='dark'?'light':'dark';save();render()}
 const sheet=h=>{$('#sheet').innerHTML=h;document.body.classList.add('open')},closeSheet=()=>document.body.classList.remove('open');
-function numSheet(t,v,cb,l){CB=cb;sheet(`<h3>${esc(t)}</h3><label>${l||'Monto'}</label><input id="ns" class="big" type="number" inputmode="decimal" value="${v||''}"><button class="btn" onclick="CB(num('ns'));closeSheet()">Guardar</button>`)}
+function numSheet(t,v,cb,l){CB=cb;sheet(`<h3>${esc(t)}</h3><label>${l||'Monto'}</label><input id="ns" class="big" type="text" inputmode="decimal" value="${fi(v)}"><button class="btn" onclick="CB(num('ns'));closeSheet()">Guardar</button>`)}
 
 views.home=()=>{const m=mk0(),inc=sumM(m,'ingreso'),exp=sumM(m,'gasto'),rem=S.budget?S.budget-exp:null;
 return `<div class="hero"><small>Saldo total</small><b>${f(totBal())}</b></div>
@@ -50,7 +51,7 @@ return `<div class="hero"><small>Saldo total</small><b>${f(totBal())}</b></div>
 function txForm(id){if(!S.accounts.length)return alert('Primero creá una cuenta en Ajustes');
 const t=id?S.tx.find(x=>x.id==id):{type:'gasto',date:today(),amount:'',acc:S.accounts[0].id,to:S.accounts[1]?.id,cat:'',sub:'',desc:''};T={...t};
 sheet(`<h3>${id?'Editar':'Nuevo'} movimiento</h3><div class="seg">${['gasto','ingreso','transferencia'].map(k=>`<button id="s_${k}" onclick="setType('${k}')">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
-<label>Importe</label><input id="f_a" class="big" type="number" inputmode="decimal" placeholder="0" value="${t.amount}">
+<label>Importe</label><input id="f_a" class="big" type="text" inputmode="decimal" placeholder="0" value="${fi(t.amount)}">
 <label>Fecha</label><input id="f_d" type="date" value="${t.date}">
 <label id="l_acc">Cuenta</label><select id="f_acc">${opt(S.accounts,t.acc)}</select>
 <div id="tobox"><label>Cuenta destino</label><select id="f_to">${opt(S.accounts,t.to)}</select></div>
@@ -77,14 +78,22 @@ return(!F.d1||t.date>=F.d1)&&(!F.d2||t.date<=F.d2)&&(!F.cat||t.cat==F.cat)&&(!F.
 (!q||[t.desc,c?.name,c?.subs.find(s=>s.id==t.sub)?.name,nm(S.accounts,t.acc),String(t.amount)].join(' ').toLowerCase().includes(q))}).sort((a,b)=>b.date.localeCompare(a.date));
 $('#hl').innerHTML=`<small style="margin-bottom:10px">${r.length} movimiento(s)</small>`+(r.map(txRow).join('')||'<small>No hay resultados.</small>')}
 
-views.stats=()=>{const m=SM||mk0(),by={};S.tx.filter(t=>t.type=='gasto'&&t.date.startsWith(m)).forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
-const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),tot=rows.reduce((a,r)=>a+r[1],0),L=last6(),ex=L.map(x=>sumM(x,'gasto')),mx=Math.max(1,...ex);
-return `<label>Mes</label><input type="month" value="${m}" onchange="SM=this.value||null;render()">
-<div class="card"><small>Gastos del mes</small><b class="r" style="font-size:28px">${f(tot)}</b></div>
-<div class="card"><b>Gastos por categoría</b>${rows.length?rows.map(([c,v],i)=>`<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${esc(nm(S.cats,c)=='—'?'Sin categoría':nm(S.cats,c))}</span><b>${f(v)}</b><small>${Math.round(v/tot*100)}%</small></div><div class="bar"><i style="width:${v/tot*100}%;background:${PAL[i%9]}"></i></div></div>`).join(''):'<small>Sin gastos en este mes</small>'}</div>
-<div class="card"><b>Ingresos vs gastos</b>${mchart()}</div>
+const MF=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],p2=n=>String(n).padStart(2,'0');
+function setPeriod(){SM=$('#py').value+'-'+$('#pm').value;render()}
+function shiftM(d){const m=SM||mk0(),x=new Date(+m.slice(0,4),+m.slice(5)-1+d,1);SM=x.getFullYear()+'-'+p2(x.getMonth()+1);render()}
+views.stats=()=>{const m=SM||mk0(),y=+m.slice(0,4),mo=m.slice(5),cy=new Date().getFullYear();let y0=Math.min(y,cy),y1=Math.max(y,cy);S.tx.forEach(t=>{const a=+t.date.slice(0,4);if(a<y0)y0=a;if(a>y1)y1=a});
+const mt=S.tx.filter(t=>t.date.startsWith(m)),by={};mt.filter(t=>t.type=='gasto').forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
+const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),inc=sumM(m,'ingreso'),tot=sumM(m,'gasto'),nt=mt.filter(t=>t.type=='transferencia').length,L=last6(m),ex=L.map(x=>sumM(x,'gasto')),mx=Math.max(1,...ex),lb=MF[+mo-1]+' '+y,yo=[];
+for(let a=y1;a>=y0;a--)yo.push(`<option ${a==y?'selected':''}>${a}</option>`);
+return `<div class="row"><button class="ic" onclick="shiftM(-1)" aria-label="Mes anterior">‹</button><select id="pm" style="flex:1;min-width:0" onchange="setPeriod()">${MF.map((n,i)=>`<option value="${p2(i+1)}" ${p2(i+1)==mo?'selected':''}>${n}</option>`).join('')}</select><select id="py" style="width:96px" onchange="setPeriod()">${yo.join('')}</select><button class="ic" onclick="shiftM(1)" aria-label="Mes siguiente">›</button></div>
+<div class="hero"><small>Balance de ${lb}</small><b>${f(inc-tot)}</b><small>Ingresos − gastos (las transferencias no se cuentan)</small></div>
+<div class="grid"><div class="card"><small>Total gastado</small><b class="r">${f(tot)}</b></div><div class="card"><small>Total ingresado</small><b class="g">${f(inc)}</b></div>
+<div class="card"><small>Total ahorrado</small><b>${f(savM(m))}</b></div><div class="card"><small>Movimientos</small><b>${mt.length}</b>${nt?`<small>${nt} transferencia(s) incluidas</small>`:''}</div></div>
+<div class="card"><b>Gastos por categoría</b>${rows.length?rows.map(([c,v],i)=>`<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${esc(nm(S.cats,c)=='—'?'Sin categoría':nm(S.cats,c))}</span><b>${f(v)}</b><small>${Math.round(v/tot*100)}%</small></div><div class="bar"><i style="width:${v/tot*100}%;background:${PAL[i%9]}"></i></div></div>`).join(''):'<small>Sin gastos en este período</small>'}</div>
+<div class="card"><b>Ingresos vs gastos</b>${mchart(m)}</div>
 <div class="card"><b>Evolución del saldo</b>${line(L.map(x=>totBal(x+'-31')),L.map(ml))}</div>
-<div class="card"><b>Gastos de meses anteriores</b>${L.slice().reverse().map((x,i)=>{const v=ex[5-i];return `<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${ml(x)} ${x.slice(0,4)}</span><b>${f(v)}</b></div><div class="bar"><i style="width:${v/mx*100}%;background:var(--r)"></i></div></div>`}).join('')}</div>`};
+<div class="card"><b>Gastos de los últimos 6 meses</b>${L.slice().reverse().map((x,i)=>{const v=ex[5-i];return `<div style="margin-top:12px"><div class="row" style="margin:0"><span class="fl">${ml(x)} ${x.slice(0,4)}</span><b>${f(v)}</b></div><div class="bar"><i style="width:${v/mx*100}%;background:var(--r)"></i></div></div>`}).join('')}</div>
+<h2>Movimientos de ${lb}</h2><div class="card">${mt.length?mt.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(txRow).join(''):'<small>Sin movimientos en este período.</small>'}</div>`};
 
 views.goals=()=>{const m=mk0(),exp=sumM(m,'gasto'),b=S.budget,p=b?Math.round(exp/b*100):0;
 return `<h2>Presupuesto del mes</h2><div class="card" onclick="numSheet('Presupuesto mensual',S.budget,v=>{S.budget=v;save();render()})"><div class="two"><div><small>Presupuesto</small><b>${f(b)}</b></div><div><small>Gastado</small><b class="r">${f(exp)}</b></div></div>
@@ -97,7 +106,7 @@ return `<div class="card"><div class="row" style="margin:0"><b class="fl">${esc(
 function catBud(id){const c=S.cats.find(x=>x.id==id);numSheet('Presupuesto de '+c.name,c.budget,v=>{c.budget=v;save();render()},'Presupuesto mensual')}
 function aport(id){const g=S.goals.find(x=>x.id==id);numSheet('Aportar a '+g.name,'',v=>{g.saved+=v;(g.hist=g.hist||[]).push({d:today(),a:v});save();render()},'Monto (negativo para retirar)')}
 function goalForm(id){const g=id?S.goals.find(x=>x.id==id):{name:'',target:'',saved:'',date:''};
-sheet(`<h3>${id?'Editar':'Nuevo'} objetivo</h3><label>Nombre</label><input id="g_n" value="${esc(g.name)}"><label>Objetivo total</label><input id="g_t" type="number" inputmode="decimal" value="${g.target}"><label>Dinero ahorrado</label><input id="g_s" type="number" inputmode="decimal" value="${g.saved}"><label>Fecha objetivo (opcional)</label><input id="g_d" type="date" value="${g.date||''}">
+sheet(`<h3>${id?'Editar':'Nuevo'} objetivo</h3><label>Nombre</label><input id="g_n" value="${esc(g.name)}"><label>Objetivo total</label><input id="g_t" type="text" inputmode="decimal" value="${fi(g.target)}"><label>Dinero ahorrado</label><input id="g_s" type="text" inputmode="decimal" value="${fi(g.saved)}"><label>Fecha objetivo (opcional)</label><input id="g_d" type="date" value="${g.date||''}">
 <button class="btn" onclick="saveGoal('${id||''}')">Guardar</button>${id?`<button class="btn del" onclick="delGoal('${id}')">Eliminar</button>`:''}`)}
 function saveGoal(id){const n=$('#g_n').value.trim();if(!n)return alert('Poné un nombre');const o={name:n,target:num('g_t'),saved:num('g_s'),date:$('#g_d').value};
 if(id)Object.assign(S.goals.find(x=>x.id==id),o);else S.goals.push({id:uid(),hist:[],...o});save();closeSheet();render()}
@@ -113,13 +122,13 @@ views.cfg=()=>`<h2>General</h2><div class="card"><label>Nombre de la aplicación
 <h2>Datos</h2><button class="btn" style="margin:0 0 8px" onclick="$('#xi').click()">Importar movimientos desde Excel</button><input type="file" id="xi" accept=".xlsx" hidden onchange="xlsPick(event)"><button class="btn sec" style="margin:0 0 8px" onclick="exp_()">Exportar copia de seguridad</button><button class="btn sec" style="margin:0 0 8px" onclick="$('#fi').click()">Importar copia de seguridad</button>
 <input type="file" id="fi" accept=".json,application/json" hidden onchange="imp(event)"><button class="btn del" style="margin:0" onclick="wipe()">Eliminar todos los datos</button>`;
 function accForm(id){const a=id?S.accounts.find(x=>x.id==id):{name:'',ini:''};
-sheet(`<h3>${id?'Editar':'Nueva'} cuenta</h3><label>Nombre</label><input id="a_n" value="${esc(a.name)}"><label>Saldo inicial</label><input id="a_i" type="number" inputmode="decimal" value="${a.ini||''}">
+sheet(`<h3>${id?'Editar':'Nueva'} cuenta</h3><label>Nombre</label><input id="a_n" value="${esc(a.name)}"><label>Saldo inicial</label><input id="a_i" type="text" inputmode="decimal" value="${fi(a.ini)}">
 <button class="btn" onclick="saveAcc('${id||''}')">Guardar</button>${id?`<button class="btn del" onclick="delAcc('${id}')">Eliminar cuenta</button>`:''}`)}
 function saveAcc(id){const n=$('#a_n').value.trim();if(!n)return alert('Poné un nombre');if(id){const a=S.accounts.find(x=>x.id==id);a.name=n;a.ini=num('a_i')}else S.accounts.push({id:uid(),name:n,ini:num('a_i')});save();closeSheet();render()}
 function delAcc(id){if(S.tx.some(t=>t.acc==id||t.to==id))return alert('Esta cuenta tiene movimientos. Eliminá o editá esos movimientos primero.');if(confirm('¿Eliminar cuenta?')){S.accounts=S.accounts.filter(x=>x.id!=id);save();closeSheet();render()}}
-function iniForm(){sheet(`<h3>Saldo inicial</h3><small style="margin-bottom:8px">¿Cuánto dinero tenías en cada cuenta al empezar a usar la app?</small>${S.accounts.map(a=>`<label>${esc(a.name)}</label><input id="i_${a.id}" type="number" inputmode="decimal" value="${a.ini||''}">`).join('')}<button class="btn" onclick="S.accounts.forEach(a=>a.ini=num('i_'+a.id));save();closeSheet();render()">Guardar</button>`)}
+function iniForm(){sheet(`<h3>Saldo inicial</h3><small style="margin-bottom:8px">¿Cuánto dinero tenías en cada cuenta al empezar a usar la app?</small>${S.accounts.map(a=>`<label>${esc(a.name)}</label><input id="i_${a.id}" type="text" inputmode="decimal" value="${fi(a.ini)}">`).join('')}<button class="btn" onclick="S.accounts.forEach(a=>a.ini=num('i_'+a.id));save();closeSheet();render()">Guardar</button>`)}
 function catForm(id){CE=id?JSON.parse(JSON.stringify(S.cats.find(c=>c.id==id))):{id:uid(),name:'',subs:[],budget:0,isNew:1};drawCat()}
-function drawCat(){sheet(`<h3>${CE.isNew?'Nueva':'Editar'} categoría</h3><label>Nombre</label><input value="${esc(CE.name)}" oninput="CE.name=this.value"><label>Presupuesto mensual (opcional)</label><input type="number" inputmode="decimal" value="${CE.budget||''}" oninput="CE.budget=+this.value||0">
+function drawCat(){sheet(`<h3>${CE.isNew?'Nueva':'Editar'} categoría</h3><label>Nombre</label><input value="${esc(CE.name)}" oninput="CE.name=this.value"><label>Presupuesto mensual (opcional)</label><input type="text" inputmode="decimal" value="${fi(CE.budget)}" oninput="CE.budget=pnum(this.value)">
 <label>Subcategorías</label>${CE.subs.map((s,i)=>`<div class="row"><input style="margin:0" value="${esc(s.name)}" placeholder="Nombre" oninput="CE.subs[${i}].name=this.value"><button class="ic" style="margin:0" onclick="CE.subs.splice(${i},1);drawCat()">✕</button></div>`).join('')}
 <button class="btn sec" onclick="CE.subs.push({id:uid(),name:''});drawCat()">+ Agregar subcategoría</button><button class="btn" onclick="saveCat()">Guardar</button>${CE.isNew?'':'<button class="btn del" onclick="delCat()">Eliminar categoría</button>'}`)}
 function saveCat(){CE.name=CE.name.trim();if(!CE.name)return alert('Poné un nombre');CE.subs=CE.subs.filter(s=>s.name.trim());const isNew=CE.isNew;delete CE.isNew;
@@ -150,7 +159,7 @@ const pdate=v=>{if(typeof v=='number'&&v>20000)return new Date(Math.floor(v-2556
 let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
 m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);if(m){let y=+m[3];if(y<100)y+=2000;return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}return ''};
 const pnum=v=>{if(typeof v=='number')return v;let s=String(v).replace(/[$\s]/g,'');if(!s)return 0;
-if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return parseFloat(s)||0};
+if(s.includes(',')&&s.includes('.'))s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');else if(s.includes(','))s=s.replace(',','.');else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return parseFloat(s)||0};
 const ktype=(a,b)=>{for(const s of[nz(a),nz(b)]){if(/transfer/.test(s))return'transferencia';if(/ingres/.test(s))return'ingreso';if(/gast|egres|salida/.test(s))return'gasto'}return''};
 const dir=s=>{s=nz(s);return/sal|orig|egres|envi|-/.test(s)?'out':/ent|dest|ingres|recib|\+/.test(s)?'in':''};
 function parseAgenda(rows){const h=rows.findIndex((r,i)=>i<15&&r.some(v=>nz(v)=='fecha')&&r.some(v=>nz(v)=='monto'));if(h<0)throw new Error('No encontré las columnas Fecha y Monto en la hoja AGENDA.');
