@@ -110,7 +110,7 @@ views.cfg=()=>`<h2>General</h2><div class="card"><label>Nombre de la aplicación
 <button class="btn sec" style="margin:0 0 8px" onclick="accForm()">+ Agregar cuenta</button><button class="btn" style="margin:0" onclick="iniForm()">Configurar saldo inicial</button>
 <h2>Categorías y subcategorías</h2><div class="card">${S.cats.map(c=>`<div class="row" onclick="catForm('${c.id}')"><div class="fl"><b>${esc(c.name)}</b><small>${c.subs.length?esc(c.subs.map(s=>s.name).join(', ')):'Sin subcategorías'}</small></div><span>›</span></div>`).join('')}</div>
 <button class="btn sec" style="margin:0" onclick="catForm()">+ Nueva categoría</button>
-<h2>Datos</h2><button class="btn sec" style="margin:0 0 8px" onclick="exp_()">Exportar copia de seguridad</button><button class="btn sec" style="margin:0 0 8px" onclick="$('#fi').click()">Importar copia de seguridad</button>
+<h2>Datos</h2><button class="btn" style="margin:0 0 8px" onclick="$('#xi').click()">Importar movimientos desde Excel</button><input type="file" id="xi" accept=".xlsx" hidden onchange="xlsPick(event)"><button class="btn sec" style="margin:0 0 8px" onclick="exp_()">Exportar copia de seguridad</button><button class="btn sec" style="margin:0 0 8px" onclick="$('#fi').click()">Importar copia de seguridad</button>
 <input type="file" id="fi" accept=".json,application/json" hidden onchange="imp(event)"><button class="btn del" style="margin:0" onclick="wipe()">Eliminar todos los datos</button>`;
 function accForm(id){const a=id?S.accounts.find(x=>x.id==id):{name:'',ini:''};
 sheet(`<h3>${id?'Editar':'Nueva'} cuenta</h3><label>Nombre</label><input id="a_n" value="${esc(a.name)}"><label>Saldo inicial</label><input id="a_i" type="number" inputmode="decimal" value="${a.ini||''}">
@@ -129,5 +129,63 @@ function exp_(){const a=document.createElement('a');a.href=URL.createObjectURL(n
 function imp(e){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts||!d.cats||!d.tx)throw 0;
 if(confirm('Esto reemplaza todos tus datos actuales. ¿Continuar?')){S=d;save();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
 function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();save();render()}}
+/* ===== Importar movimientos desde Excel (hoja AGENDA) ===== */
+const nz=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+let XI=null;
+async function inflate(d){return new Uint8Array(await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer())}
+async function unzip(buf){const dv=new DataView(buf),u=new Uint8Array(buf);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!=0x06054b50)e--;if(e<0)throw 0;
+const n=dv.getUint16(e+10,true),out={};let p=dv.getUint32(e+16,true);
+for(let i=0;i<n;i++){const m=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true),name=new TextDecoder().decode(u.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;
+const st=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true),d=u.subarray(st,st+cs);out[name]=m==0?d:await inflate(d)}return out}
+const xml=(z,n)=>z[n]?new DOMParser().parseFromString(new TextDecoder().decode(z[n]),'text/xml'):null;
+const txt=el=>[...el.getElementsByTagName('t')].filter(x=>x.parentNode.nodeName!='rPh').map(x=>x.textContent).join('');
+const colN=r=>r.replace(/\d/g,'').split('').reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0)-1;
+async function readSheet(buf,name){const z=await unzip(buf),wb=xml(z,'xl/workbook.xml'),rel=xml(z,'xl/_rels/workbook.xml.rels');
+const s=[...wb.getElementsByTagName('sheet')].find(x=>x.getAttribute('name').trim().toUpperCase()==name);if(!s)throw new Error('No encontré una hoja llamada AGENDA en el Excel.');
+const rid=s.getAttribute('r:id'),t=[...rel.getElementsByTagName('Relationship')].find(r=>r.getAttribute('Id')==rid).getAttribute('Target').replace(/^\//,''),path=t.startsWith('xl/')?t:'xl/'+t;
+const ss=xml(z,'xl/sharedStrings.xml'),strs=ss?[...ss.getElementsByTagName('si')].map(txt):[],rows=[];
+for(const r of xml(z,path).getElementsByTagName('row')){const row=[];for(const c of r.getElementsByTagName('c')){const ty=c.getAttribute('t'),vv=c.getElementsByTagName('v')[0],v=vv?vv.textContent:null;
+row[colN(c.getAttribute('r'))]=ty=='s'?strs[+v]:ty=='inlineStr'?txt(c):(ty=='str'||ty=='e'||ty=='b')?v:v==null?'':+v}rows.push(row)}return rows}
+const pdate=v=>{if(typeof v=='number'&&v>20000)return new Date(Math.floor(v-25569)*864e5).toISOString().slice(0,10);const s=String(v).trim();
+let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);if(m){let y=+m[3];if(y<100)y+=2000;return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}return ''};
+const pnum=v=>{if(typeof v=='number')return v;let s=String(v).replace(/[$\s]/g,'');if(!s)return 0;
+if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return parseFloat(s)||0};
+const ktype=(a,b)=>{for(const s of[nz(a),nz(b)]){if(/transfer/.test(s))return'transferencia';if(/ingres/.test(s))return'ingreso';if(/gast|egres|salida/.test(s))return'gasto'}return''};
+const dir=s=>{s=nz(s);return/sal|orig|egres|envi|-/.test(s)?'out':/ent|dest|ingres|recib|\+/.test(s)?'in':''};
+function parseAgenda(rows){const h=rows.findIndex((r,i)=>i<15&&r.some(v=>nz(v)=='fecha')&&r.some(v=>nz(v)=='monto'));if(h<0)throw new Error('No encontré las columnas Fecha y Monto en la hoja AGENDA.');
+const H=Array.from(rows[h],nz),ix=f=>H.findIndex(f),c={fe:ix(x=>x=='fecha'),it:ix(x=>x=='item'),ca:ix(x=>x=='categoria'),su:ix(x=>x=='subcategoria'),bi:ix(x=>x=='billetera'),mo:ix(x=>x=='monto'),ti:ix(x=>x.startsWith('tipo')),im:ix(x=>x=='impacto'),se:ix(x=>x.startsWith('sentido'))};
+const out={items:[],skip:{},bad:{}},legs=[],sk=k=>out.skip[k]=(out.skip[k]||0)+1;
+for(const r of rows.slice(h+1)){if(!r||!r.some(v=>String(v??'').trim()!==''))continue;const g=i=>i<0?'':r[i]??'';
+const date=pdate(g(c.fe)),amount=Math.abs(pnum(g(c.mo))),type=ktype(g(c.ti),g(c.im));
+if(!date){sk('Sin fecha válida');continue}if(!amount){sk('Sin monto');continue}
+if(!type){const k=String(g(c.ti)).trim()||'(vacío)';out.bad[k]=(out.bad[k]||0)+1;continue}
+const o={type,date,amount,desc:String(g(c.it)).trim(),cat:String(g(c.ca)).trim(),sub:String(g(c.su)).trim(),acc:String(g(c.bi)).trim(),to:''};
+if(type=='transferencia'){o.cat=o.sub='';const p=o.acc.split(/\s*(?:→|->|=>|>)\s*/);
+if(p.length==2&&p[0]&&p[1]&&nz(p[0])!=nz(p[1])){o.acc=p[0];o.to=p[1];out.items.push(o)}else if(o.acc)legs.push({...o,dir:dir(g(c.se))||dir(g(c.im))});else sk('Sin billetera')}
+else if(!o.acc)sk('Sin billetera');else out.items.push(o)}
+const used=new Set(),ok=(a,b,k,same)=>!used.has(k)&&b.dir=='in'&&b.date==a.date&&b.amount==a.amount&&nz(b.acc)!=nz(a.acc)&&(!same||nz(b.desc)==nz(a.desc));
+legs.forEach((a,i)=>{if(used.has(i)||a.dir!='out')return;let j=legs.findIndex((b,k)=>ok(a,b,k,1));if(j<0)j=legs.findIndex((b,k)=>ok(a,b,k,0));
+if(j>=0){used.add(i);used.add(j);out.items.push({type:a.type,date:a.date,amount:a.amount,desc:a.desc,cat:'',sub:'',acc:a.acc,to:legs[j].acc})}});
+legs.forEach((a,i)=>{if(!used.has(i))sk('Transferencia sin contraparte')});
+const cnt={};out.items.forEach(o=>{const k=nz([o.type,o.date,o.desc,o.cat,o.sub,o.acc,o.to,o.amount].join('|'));cnt[k]=(cnt[k]||0)+1;o.key='x:'+k+'#'+cnt[k]});return out}
+function xlsPreview(o){XI=o;const have=new Set(S.tx.map(t=>t.key).filter(Boolean)),dup=o.items.filter(i=>have.has(i.key)).length,n=t=>o.items.filter(i=>i.type==t).length,A=new Set(),C=new Set();
+o.items.forEach(i=>{[i.acc,i.to].filter(Boolean).forEach(a=>{if(!S.accounts.some(x=>nz(x.name)==nz(a)))A.add(a)});if(i.cat&&!S.cats.some(x=>nz(x.name)==nz(i.cat)))C.add(i.cat)});
+const sk=[...Object.entries(o.skip).map(([k,v])=>`${k}: ${v}`),...Object.entries(o.bad).map(([k,v])=>`Tipo no reconocido "${k}": ${v}`)];
+sheet(`<h3>Importar movimientos</h3><div class="card"><b>${o.items.length} movimientos encontrados</b><small>Gastos: ${n('gasto')} · Ingresos: ${n('ingreso')} · Transferencias: ${n('transferencia')}</small><small>Ya importados antes: ${dup}</small></div>
+${A.size?`<small style="margin-bottom:8px">Se crearán cuentas nuevas (saldo inicial $0): ${esc([...A].join(', '))}</small>`:''}${C.size?`<small style="margin-bottom:8px">Se crearán ${C.size} categorías nuevas.</small>`:''}
+${sk.length?`<div class="card"><b class="r">No se importarán</b>${sk.map(s=>`<small>${esc(s)}</small>`).join('')}</div>`:''}
+<label style="display:flex;gap:12px;align-items:center;font-size:15px;color:var(--t)"><input type="checkbox" id="xd" checked style="width:24px;height:24px;margin:0">Evitar duplicados si ya importé este Excel</label>
+<button class="btn" onclick="xlsApply()">Importar ${o.items.length} movimientos</button><button class="btn sec" onclick="closeSheet()">Cancelar</button>`)}
+function xlsApply(){const dd=$('#xd').checked,have=new Set(S.tx.map(t=>t.key).filter(Boolean));let add=0,dup=0;
+const acc=n=>{let a=S.accounts.find(x=>nz(x.name)==nz(n));if(!a)S.accounts.push(a={id:uid(),name:n,ini:0});return a.id};
+for(const i of XI.items){if(dd&&have.has(i.key)){dup++;continue}let cat='',sub='';
+if(i.cat){let c=S.cats.find(x=>nz(x.name)==nz(i.cat));if(!c)S.cats.push(c={id:uid(),name:i.cat,subs:[],budget:0});cat=c.id;
+if(i.sub){let s=c.subs.find(x=>nz(x.name)==nz(i.sub));if(!s)c.subs.push(s={id:uid(),name:i.sub});sub=s.id}}
+S.tx.push({id:uid(),type:i.type,amount:i.amount,date:i.date,acc:acc(i.acc),to:i.to?acc(i.to):'',cat,sub,desc:i.desc,key:i.key});add++}
+save();closeSheet();render();alert(`Se importaron ${add} movimientos.`+(dup?` Se omitieron ${dup} duplicados.`:''))}
+async function xlsPick(e){const f=e.target.files[0];e.target.value='';if(!f)return;
+try{if(typeof DecompressionStream=='undefined')throw new Error('Tu navegador no puede leer Excel. Actualizá iOS/Safari.');xlsPreview(parseAgenda(await readSheet(await f.arrayBuffer(),'AGENDA')))}
+catch(x){alert(x.message&&x.message.length<200?x.message:'No pude leer el archivo. Tiene que ser un Excel .xlsx con una hoja llamada AGENDA.')}}
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));
 render();
