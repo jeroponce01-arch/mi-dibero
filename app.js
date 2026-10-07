@@ -19,7 +19,7 @@ const sumM=(m,t)=>S.tx.filter(x=>x.type==t&&x.date.startsWith(m)).reduce((a,x)=>
 const catSpent=(c,m)=>S.tx.filter(x=>x.type=='gasto'&&x.cat==c&&x.date.startsWith(m)).reduce((a,x)=>a+netAmt(x),0);
 const savM=m=>{const ac=S.cats.find(c=>c.name.toLowerCase()=='ahorro');return S.goals.flatMap(g=>g.hist||[]).filter(h=>h.d.startsWith(m)).reduce((a,h)=>a+h.a,0)+(ac?catSpent(ac.id,m):0)};
 const bal=(id,u='9999')=>(S.accounts.find(x=>x.id==id)?.ini||0)+S.tx.reduce((s,t)=>{if(t.date>u)return s;
-if(t.type=='ingreso'&&t.acc==id)s+=t.amount;if(t.type=='gasto'&&t.acc==id)s-=netAmt(t);
+if(t.type=='ingreso'&&t.acc==id)s+=t.amount;if(t.type=='gasto'){if(t.acc==id)s-=+t.amount||0;if((+t.refund||0)>0&&t.refundAcc==id)s+=+t.refund||0}
 if(t.type=='transferencia'){if(t.acc==id)s-=t.amount;if(t.to==id)s+=t.amount}return s},0);
 const totBal=u=>S.accounts.reduce((a,x)=>a+bal(x.id,u),0);
 const bar=p=>`<div class="bar"><i style="width:${Math.min(p,100)}%;background:${p>=100?'var(--r)':p>=80?'#f59e0b':'var(--p)'}"></i></div>`;
@@ -31,7 +31,7 @@ return `<svg viewBox="0 0 320 150" class="chart"><polyline points="${p.map(q=>q.
 const leg='<div class="leg"><span style="color:var(--g)">● Ingresos</span><span style="color:var(--r)">● Gastos</span></div>';
 const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'ingreso'),b:sumM(m,'gasto')})))};
 const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc),na=netAmt(t),rf=t.type=='gasto'&&(+t.refund||0)>0;
-return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}${rf?` · Devolución ${f(t.refund)}`:''}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(na)}</b></div>`};
+return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}${rf?` · Devolución ${f(t.refund)} → ${esc(nm(S.accounts,t.refundAcc||t.acc))}`:''}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(na)}</b></div>`};
 let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',sub:'',type:'',acc:''};const views={};
 const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos e ingresos'],['invest','📈','Inversiones'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
 function render(){document.documentElement.dataset.t=S.theme=='auto'?'':S.theme;$('#ttl').textContent=S.name;document.title=S.name;
@@ -51,10 +51,10 @@ return `<div class="hero"><small>Saldo total</small><b>${f(totBal())}</b></div>
 <h2>Últimos movimientos</h2><div class="card">${S.tx.length?S.tx.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(txRow).join(''):'<small>Todavía no hay movimientos. Tocá ＋ para crear el primero.</small>'}</div>`};
 
 function txForm(id){if(!S.accounts.length)return alert('Primero creá una cuenta en Ajustes');
-const t=id?S.tx.find(x=>x.id==id):{type:'gasto',date:today(),amount:'',acc:S.accounts[0].id,to:S.accounts[1]?.id,cat:'',sub:'',desc:''};T={...t};
+const t=id?S.tx.find(x=>x.id==id):{type:'gasto',date:today(),amount:'',acc:S.accounts[0].id,to:S.accounts[1]?.id,cat:'',sub:'',desc:'',refund:0,refundAcc:S.accounts[0].id};T={...t,refundAcc:t.refundAcc||t.acc||S.accounts[0]?.id};
 sheet(`<h3>${id?'Editar':'Nuevo'} movimiento</h3><div class="seg">${['gasto','ingreso','transferencia'].map(k=>`<button id="s_${k}" onclick="setType('${k}')">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
 <label>Importe pagado/cobrado</label><input id="f_a" class="big" type="text" inputmode="decimal" placeholder="0" value="${fi(t.amount)}">
-<div id="refundbox"><label>Devolución / reintegro que te devolvieron <small>(opcional)</small></label><input id="f_r" type="text" inputmode="decimal" placeholder="0" value="${fi(t.refund||'')}"><small>Ejemplo: pagaste $10.000 y tu amigo te devuelve $5.000 → el gasto neto será $5.000.</small></div>
+<div id="refundbox"><label>Devolución / reintegro que te devolvieron <small>(opcional)</small></label><input id="f_r" type="text" inputmode="decimal" placeholder="0" value="${fi(t.refund||'')}" oninput="toggleRefundAcc()"><label>Billetera de la devolución</label><select id="f_ra">${opt(S.accounts,T.refundAcc)}</select><small>Ejemplo: pagaste $10.000 con Mercado Pago y tu amigo te devuelve $5.000 en Efectivo. Se descuentan $10.000 de Mercado Pago y se suman $5.000 a Efectivo; el gasto neto es $5.000.</small></div>
 <label>Fecha</label><input id="f_d" type="date" value="${t.date}">
 <label id="l_acc">Cuenta</label><select id="f_acc">${opt(S.accounts,t.acc)}</select>
 <div id="tobox"><label>Cuenta destino</label><select id="f_to">${opt(S.accounts,t.to)}</select></div>
@@ -62,12 +62,14 @@ sheet(`<h3>${id?'Editar':'Nuevo'} movimiento</h3><div class="seg">${['gasto','in
 <label>Descripción</label><input id="f_ds" value="${esc(t.desc||'')}" placeholder="Opcional">
 <button class="btn" onclick="saveTx('${id||''}')">Guardar</button>${id?`<button class="btn del" onclick="delTx('${id}')">Eliminar movimiento</button>`:''}`);setType(T.type);fillSubs(t.sub)}
 function setType(k){T.type=k;['gasto','ingreso','transferencia'].forEach(x=>$('#s_'+x).classList.toggle('on',x==k));
-$('#tobox').style.display=k=='transferencia'?'':'none';$('#catbox').style.display=k=='transferencia'?'none':'';$('#refundbox').style.display=k=='gasto'?'':'none';$('#l_acc').textContent=k=='transferencia'?'Cuenta origen':'Cuenta'}
+$('#tobox').style.display=k=='transferencia'?'':'none';$('#catbox').style.display=k=='transferencia'?'none':'';$('#refundbox').style.display=k=='gasto'?'':'none';$('#l_acc').textContent=k=='transferencia'?'Cuenta origen':'Cuenta';if(k=='gasto')toggleRefundAcc()}
+function toggleRefundAcc(){const r=$('#f_r');const box=$('#f_ra');if(!r||!box)return;const has=num('f_r')>0;box.disabled=!has;box.parentElement.style.opacity=has?'1':'.55'}
 function fillSubs(sel){const c=S.cats.find(x=>x.id==$('#f_c').value);$('#f_s').innerHTML='<option value="">Sin subcategoría</option>'+(c?opt(c.subs,sel):'')}
 function saveTx(id){const a=num('f_a');if(a<=0)return alert('Ingresá un importe mayor a 0');const tr=T.type=='transferencia',acc=$('#f_acc').value,to=tr?$('#f_to').value:'';
 if(tr&&acc==to)return alert('La cuenta origen y destino deben ser distintas');
 const refund=T.type=='gasto'?num('f_r'):0;if(refund<0||refund>a)return alert('La devolución no puede ser mayor que el importe pagado.');
-const o={id:id||uid(),type:T.type,amount:a,refund,date:$('#f_d').value||today(),acc,to,cat:tr?'':$('#f_c').value,sub:tr?'':$('#f_s').value,desc:$('#f_ds').value.trim()};
+const refundAcc=T.type=='gasto'&&refund>0?$('#f_ra').value:'';
+const o={id:id||uid(),type:T.type,amount:a,refund,refundAcc,date:$('#f_d').value||today(),acc,to,cat:tr?'':$('#f_c').value,sub:tr?'':$('#f_s').value,desc:$('#f_ds').value.trim()};
 if(id)S.tx[S.tx.findIndex(x=>x.id==id)]=o;else S.tx.push(o);save();closeSheet();render()}
 function delTx(id){if(confirm('¿Eliminar este movimiento?')){S.tx=S.tx.filter(x=>x.id!=id);save();closeSheet();render()}}
 
