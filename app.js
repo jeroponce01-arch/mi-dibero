@@ -14,11 +14,12 @@ const nm=(a,id)=>a.find(x=>x.id==id)?.name||'—';
 const opt=(a,sel)=>a.map(o=>`<option value="${o.id}" ${o.id==sel?'selected':''}>${esc(o.name)}</option>`).join('');
 const MN=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],ml=m=>MN[+m.slice(5)-1];
 const last6=(e=mk0())=>{const[ey,em]=e.split('-').map(Number),o=[];for(let i=5;i>=0;i--){const x=new Date(ey,em-1-i,1);o.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}return o};
-const sumM=(m,t)=>S.tx.filter(x=>x.type==t&&x.date.startsWith(m)).reduce((a,x)=>a+x.amount,0);
-const catSpent=(c,m)=>S.tx.filter(x=>x.type=='gasto'&&x.cat==c&&x.date.startsWith(m)).reduce((a,x)=>a+x.amount,0);
+const netAmt=x=>x.type=='gasto'?Math.max(0,(+x.amount||0)-(+x.refund||0)):(+x.amount||0);
+const sumM=(m,t)=>S.tx.filter(x=>x.type==t&&x.date.startsWith(m)).reduce((a,x)=>a+netAmt(x),0);
+const catSpent=(c,m)=>S.tx.filter(x=>x.type=='gasto'&&x.cat==c&&x.date.startsWith(m)).reduce((a,x)=>a+netAmt(x),0);
 const savM=m=>{const ac=S.cats.find(c=>c.name.toLowerCase()=='ahorro');return S.goals.flatMap(g=>g.hist||[]).filter(h=>h.d.startsWith(m)).reduce((a,h)=>a+h.a,0)+(ac?catSpent(ac.id,m):0)};
 const bal=(id,u='9999')=>(S.accounts.find(x=>x.id==id)?.ini||0)+S.tx.reduce((s,t)=>{if(t.date>u)return s;
-if(t.type=='ingreso'&&t.acc==id)s+=t.amount;if(t.type=='gasto'&&t.acc==id)s-=t.amount;
+if(t.type=='ingreso'&&t.acc==id)s+=t.amount;if(t.type=='gasto'&&t.acc==id)s-=netAmt(t);
 if(t.type=='transferencia'){if(t.acc==id)s-=t.amount;if(t.to==id)s+=t.amount}return s},0);
 const totBal=u=>S.accounts.reduce((a,x)=>a+bal(x.id,u),0);
 const bar=p=>`<div class="bar"><i style="width:${Math.min(p,100)}%;background:${p>=100?'var(--r)':p>=80?'#f59e0b':'var(--p)'}"></i></div>`;
@@ -29,8 +30,8 @@ function line(v,l){const mn=Math.min(...v),r=(Math.max(...v)-mn)||1,p=v.map((y,i
 return `<svg viewBox="0 0 320 150" class="chart"><polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="var(--p)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${p.map((q,i)=>`<circle cx="${q[0]}" cy="${q[1]}" r="4" fill="var(--p)"/><text x="${q[0]}" y="140" text-anchor="middle">${l[i]}</text>`).join('')}</svg>`}
 const leg='<div class="leg"><span style="color:var(--g)">● Ingresos</span><span style="color:var(--r)">● Gastos</span></div>';
 const mchart=e=>{const L=last6(e);return leg+bars(L.map(m=>({l:ml(m),a:sumM(m,'ingreso'),b:sumM(m,'gasto')})))};
-const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc);
-return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(t.amount)}</b></div>`};
+const txRow=t=>{const c=S.cats.find(x=>x.id==t.cat),s=c?.subs.find(x=>x.id==t.sub),tr=t.type=='transferencia',a=nm(S.accounts,t.acc),na=netAmt(t),rf=t.type=='gasto'&&(+t.refund||0)>0;
+return `<div class="row" onclick="txForm('${t.id}')"><span class="dot ${t.type}">${tr?'⇄':t.type=='ingreso'?'↑':'↓'}</span><div class="fl"><b>${esc(t.desc||(tr?'Transferencia':c?c.name:'Sin categoría'))}</b><small>${esc(tr?a+' → '+nm(S.accounts,t.to):[c?.name,s?.name,a].filter(Boolean).join(' · '))} · ${fd(t.date)}${rf?` · Devolución ${f(t.refund)}`:''}</small></div><b class="${t.type=='ingreso'?'g':tr?'':'r'}">${t.type=='gasto'?'-':t.type=='ingreso'?'+':''}${f(na)}</b></div>`};
 let tab='home',T,CE,CB,SM=null,F={q:'',d1:'',d2:'',cat:'',sub:'',type:'',acc:''};const views={};
 const TABS=[['home','🏠','Inicio'],['hist','🧾','Historial'],['stats','📊','Estadísticas'],['gastos','💸','Gastos e ingresos'],['invest','📈','Inversiones'],['goals','🎯','Metas'],['cfg','⚙️','Ajustes']];
 function render(){document.documentElement.dataset.t=S.theme=='auto'?'':S.theme;$('#ttl').textContent=S.name;document.title=S.name;
@@ -52,7 +53,8 @@ return `<div class="hero"><small>Saldo total</small><b>${f(totBal())}</b></div>
 function txForm(id){if(!S.accounts.length)return alert('Primero creá una cuenta en Ajustes');
 const t=id?S.tx.find(x=>x.id==id):{type:'gasto',date:today(),amount:'',acc:S.accounts[0].id,to:S.accounts[1]?.id,cat:'',sub:'',desc:''};T={...t};
 sheet(`<h3>${id?'Editar':'Nuevo'} movimiento</h3><div class="seg">${['gasto','ingreso','transferencia'].map(k=>`<button id="s_${k}" onclick="setType('${k}')">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
-<label>Importe</label><input id="f_a" class="big" type="text" inputmode="decimal" placeholder="0" value="${fi(t.amount)}">
+<label>Importe pagado/cobrado</label><input id="f_a" class="big" type="text" inputmode="decimal" placeholder="0" value="${fi(t.amount)}">
+<div id="refundbox"><label>Devolución / reintegro que te devolvieron <small>(opcional)</small></label><input id="f_r" type="text" inputmode="decimal" placeholder="0" value="${fi(t.refund||'')}"><small>Ejemplo: pagaste $10.000 y tu amigo te devuelve $5.000 → el gasto neto será $5.000.</small></div>
 <label>Fecha</label><input id="f_d" type="date" value="${t.date}">
 <label id="l_acc">Cuenta</label><select id="f_acc">${opt(S.accounts,t.acc)}</select>
 <div id="tobox"><label>Cuenta destino</label><select id="f_to">${opt(S.accounts,t.to)}</select></div>
@@ -60,11 +62,12 @@ sheet(`<h3>${id?'Editar':'Nuevo'} movimiento</h3><div class="seg">${['gasto','in
 <label>Descripción</label><input id="f_ds" value="${esc(t.desc||'')}" placeholder="Opcional">
 <button class="btn" onclick="saveTx('${id||''}')">Guardar</button>${id?`<button class="btn del" onclick="delTx('${id}')">Eliminar movimiento</button>`:''}`);setType(T.type);fillSubs(t.sub)}
 function setType(k){T.type=k;['gasto','ingreso','transferencia'].forEach(x=>$('#s_'+x).classList.toggle('on',x==k));
-$('#tobox').style.display=k=='transferencia'?'':'none';$('#catbox').style.display=k=='transferencia'?'none':'';$('#l_acc').textContent=k=='transferencia'?'Cuenta origen':'Cuenta'}
+$('#tobox').style.display=k=='transferencia'?'':'none';$('#catbox').style.display=k=='transferencia'?'none':'';$('#refundbox').style.display=k=='gasto'?'':'none';$('#l_acc').textContent=k=='transferencia'?'Cuenta origen':'Cuenta'}
 function fillSubs(sel){const c=S.cats.find(x=>x.id==$('#f_c').value);$('#f_s').innerHTML='<option value="">Sin subcategoría</option>'+(c?opt(c.subs,sel):'')}
 function saveTx(id){const a=num('f_a');if(a<=0)return alert('Ingresá un importe mayor a 0');const tr=T.type=='transferencia',acc=$('#f_acc').value,to=tr?$('#f_to').value:'';
 if(tr&&acc==to)return alert('La cuenta origen y destino deben ser distintas');
-const o={id:id||uid(),type:T.type,amount:a,date:$('#f_d').value||today(),acc,to,cat:tr?'':$('#f_c').value,sub:tr?'':$('#f_s').value,desc:$('#f_ds').value.trim()};
+const refund=T.type=='gasto'?num('f_r'):0;if(refund<0||refund>a)return alert('La devolución no puede ser mayor que el importe pagado.');
+const o={id:id||uid(),type:T.type,amount:a,refund,date:$('#f_d').value||today(),acc,to,cat:tr?'':$('#f_c').value,sub:tr?'':$('#f_s').value,desc:$('#f_ds').value.trim()};
 if(id)S.tx[S.tx.findIndex(x=>x.id==id)]=o;else S.tx.push(o);save();closeSheet();render()}
 function delTx(id){if(confirm('¿Eliminar este movimiento?')){S.tx=S.tx.filter(x=>x.id!=id);save();closeSheet();render()}}
 
@@ -86,7 +89,7 @@ const MF=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Sep
 function setPeriod(){SM=$('#py').value+'-'+$('#pm').value;render()}
 function shiftM(d){const m=SM||mk0(),x=new Date(+m.slice(0,4),+m.slice(5)-1+d,1);SM=x.getFullYear()+'-'+p2(x.getMonth()+1);render()}
 views.stats=()=>{const m=SM||mk0(),y=+m.slice(0,4),mo=m.slice(5),cy=new Date().getFullYear();let y0=Math.min(y,cy),y1=Math.max(y,cy);S.tx.forEach(t=>{const a=+t.date.slice(0,4);if(a<y0)y0=a;if(a>y1)y1=a});
-const mt=S.tx.filter(t=>t.date.startsWith(m)),by={};mt.filter(t=>t.type=='gasto').forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
+const mt=S.tx.filter(t=>t.date.startsWith(m)),by={};mt.filter(t=>t.type=='gasto').forEach(t=>by[t.cat]=(by[t.cat]||0)+netAmt(t));
 const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),inc=sumM(m,'ingreso'),tot=sumM(m,'gasto'),nt=mt.filter(t=>t.type=='transferencia').length,L=last6(m),ex=L.map(x=>sumM(x,'gasto')),mx=Math.max(1,...ex),lb=MF[+mo-1]+' '+y,yo=[];
 for(let a=y1;a>=y0;a--)yo.push(`<option ${a==y?'selected':''}>${a}</option>`);
 return `<div class="row"><button class="ic" onclick="shiftM(-1)" aria-label="Mes anterior">‹</button><select id="pm" style="flex:1;min-width:0" onchange="setPeriod()">${MF.map((n,i)=>`<option value="${p2(i+1)}" ${p2(i+1)==mo?'selected':''}>${n}</option>`).join('')}</select><select id="py" style="width:96px" onchange="setPeriod()">${yo.join('')}</select><button class="ic" onclick="shiftM(1)" aria-label="Mes siguiente">›</button></div>
@@ -306,7 +309,7 @@ const acc=n=>{let a=S.accounts.find(x=>nz(x.name)==nz(n));if(!a)S.accounts.push(
 for(const i of XI.items){if(dd&&have.has(i.key)){dup++;continue}let cat='',sub='';
 if(i.cat){let c=S.cats.find(x=>nz(x.name)==nz(i.cat));if(!c)S.cats.push(c={id:uid(),name:i.cat,subs:[],budget:0});cat=c.id;
 if(i.sub){let s=c.subs.find(x=>nz(x.name)==nz(i.sub));if(!s)c.subs.push(s={id:uid(),name:i.sub});sub=s.id}}
-S.tx.push({id:uid(),type:i.type,amount:i.amount,date:i.date,acc:acc(i.acc),to:i.to?acc(i.to):'',cat,sub,desc:i.desc,key:i.key});add++}
+S.tx.push({id:uid(),type:i.type,amount:i.amount,refund:0,date:i.date,acc:acc(i.acc),to:i.to?acc(i.to):'',cat,sub,desc:i.desc,key:i.key});add++}
 save();closeSheet();render();alert(`Se importaron ${add} movimientos.`+(dup?` Se omitieron ${dup} duplicados.`:''))}
 async function xlsPick(e){const f=e.target.files[0];e.target.value='';if(!f)return;
 try{if(typeof DecompressionStream=='undefined')throw new Error('Tu navegador no puede leer Excel. Actualizá iOS/Safari.');xlsPreview(parseAgenda(await readSheet(await f.arrayBuffer(),'AGENDA')))}
@@ -331,23 +334,23 @@ const gW=n=>`style="width:${n*40>320?n*40+'px':'100%'};max-width:none;height:aut
 const gbars=(v,l,col)=>{const n=v.length,mx=Math.max(1,...v);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart">`+v.map((y,i)=>{const h=y/mx*105;return `<rect x="${i*40+8}" y="${120-h}" width="24" height="${h}" rx="4" fill="${col}"/><text x="${i*40+20}" y="138" text-anchor="middle" style="font-size:9px">${l[i]}</text>`}).join('')+`<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
 const gdual=(a,b,l)=>{const n=a.length,mx=Math.max(1,...a,...b);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart">`+a.map((y,i)=>{const h=y/mx*105,k=b[i]/mx*105;return `<rect x="${i*40+4}" y="${120-h}" width="15" height="${h}" rx="3" fill="var(--g)"/><rect x="${i*40+21}" y="${120-k}" width="15" height="${k}" rx="3" fill="var(--r)"/><text x="${i*40+20}" y="138" text-anchor="middle" style="font-size:9px">${l[i]}</text>`}).join('')+`<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
 const gline=(v,l)=>{const n=v.length,mx=Math.max(1,...v),p=v.map((y,i)=>[i*40+20,115-y/mx*95]);return `<div class="scroll"><svg viewBox="0 0 ${Math.max(320,n*40)} 150" ${gW(n)} class="chart"><polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="var(--p)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${p.map((q,i)=>`<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="var(--p)"/><text x="${q[0]}" y="140" text-anchor="middle" style="font-size:9px">${l[i]}</text>`).join('')}<text x="2" y="10" style="font-size:9px">Máx ${f(mx)}</text></svg></div>`};
-views.gastos=()=>{const pd=d=>(!G.y||d.startsWith(G.y))&&(!G.m||d.slice(5,7)==G.m),sel=S.tx.filter(t=>pd(t.date)),gs=sel.filter(t=>t.type=='gasto'),sum=a=>a.reduce((x,t)=>x+t.amount,0),inc=sum(sel.filter(t=>t.type=='ingreso')),tot=sum(gs),
-ac=S.cats.find(c=>nz(c.name)=='ahorro'),sav=S.goals.flatMap(g=>g.hist||[]).filter(h=>pd(h.d)).reduce((x,h)=>x+h.a,0)+sum(gs.filter(t=>ac&&t.cat==ac.id)),big=gs.reduce((b,t)=>t.amount>(b?b.amount:0)?t:b,null),
-by={};gs.forEach(t=>{const o=by[t.cat]=by[t.cat]||{v:0,n:0,s:{}};o.v+=t.amount;o.n++;o.s[t.sub]=(o.s[t.sub]||0)+t.amount});const rows=Object.entries(by).sort((p,q)=>q[1].v-p[1].v),byI={};sel.filter(t=>t.type=='ingreso').forEach(t=>{const o=byI[t.cat]=byI[t.cat]||{v:0,n:0,s:{}};o.v+=t.amount;o.n++;o.s[t.sub]=(o.s[t.sub]||0)+t.amount});const rowsI=Object.entries(byI).sort((p,q)=>q[1].v-p[1].v),
+views.gastos=()=>{const pd=d=>(!G.y||d.startsWith(G.y))&&(!G.m||d.slice(5,7)==G.m),sel=S.tx.filter(t=>pd(t.date)),gs=sel.filter(t=>t.type=='gasto'),sum=a=>a.reduce((x,t)=>x+netAmt(t),0),inc=sum(sel.filter(t=>t.type=='ingreso')),tot=sum(gs),
+ac=S.cats.find(c=>nz(c.name)=='ahorro'),sav=S.goals.flatMap(g=>g.hist||[]).filter(h=>pd(h.d)).reduce((x,h)=>x+h.a,0)+sum(gs.filter(t=>ac&&t.cat==ac.id)),big=gs.reduce((b,t)=>netAmt(t)>(b?netAmt(b):0)?t:b,null),
+by={};gs.forEach(t=>{const o=by[t.cat]=by[t.cat]||{v:0,n:0,s:{}};o.v+=netAmt(t);o.n++;o.s[t.sub]=(o.s[t.sub]||0)+netAmt(t)});const rows=Object.entries(by).sort((p,q)=>q[1].v-p[1].v),byI={};sel.filter(t=>t.type=='ingreso').forEach(t=>{const o=byI[t.cat]=byI[t.cat]||{v:0,n:0,s:{}};o.v+=netAmt(t);o.n++;o.s[t.sub]=(o.s[t.sub]||0)+netAmt(t)});const rowsI=Object.entries(byI).sort((p,q)=>q[1].v-p[1].v),
 years=[...new Set([...S.tx.map(t=>t.date.slice(0,4)),...(G.y?[G.y]:[])])].sort(),
 lb=G.y&&G.m?MF[+G.m-1]+' '+G.y:G.y?'Año '+G.y:G.m?MF[+G.m-1]+' (todos los años)':'Historial completo',
 cn=id=>nm(S.cats,id)=='—'?'Sin categoría':nm(S.cats,id);
 const match=t=>(!G.c||t.cat==G.c)&&(!G.s||t.sub==G.s),okG=t=>t.type=='gasto'&&match(t),okI=t=>t.type=='ingreso'&&match(t),sg={},si={},al=new Set();
-S.tx.forEach(t=>{if(t.type=='transferencia'||(G.y&&!t.date.startsWith(G.y)))return;const m=t.date.slice(0,7);al.add(m);if(okI(t))si[m]=(si[m]||0)+t.amount;if(okG(t))sg[m]=(sg[m]||0)+t.amount});
+S.tx.forEach(t=>{if(t.type=='transferencia'||(G.y&&!t.date.startsWith(G.y)))return;const m=t.date.slice(0,7);al.add(m);if(okI(t))si[m]=(si[m]||0)+t.amount;if(okG(t))sg[m]=(sg[m]||0)+netAmt(t)});
 let M=[];if(G.y)for(let i=1;i<=12;i++)M.push(G.y+'-'+p2(i));else if(al.size){const k=[...al].sort();let[y,mo]=k[0].split('-').map(Number);for(;;){const x=y+'-'+p2(mo);M.push(x);if(x>=k[k.length-1])break;if(++mo>12){mo=1;y++}}}
 const vg=M.map(m=>sg[m]||0),vi=M.map(m=>si[m]||0),lab=M.map(gL),co=S.cats.find(c=>c.id==G.c);
 const allM=[...new Set(S.tx.filter(t=>t.type=='gasto').map(t=>t.date.slice(0,7)))].sort(),A=G.a||allM[allM.length-2]||allM[0]||'',B=G.b||allM[allM.length-1]||'',
-sp=m=>{const o={};S.tx.forEach(t=>{if(t.type=='gasto'&&t.date.startsWith(m))o[t.cat]=(o[t.cat]||0)+t.amount});return o},pa=sp(A),pb=sp(B),ta=Object.values(pa).reduce((x,v)=>x+v,0),tb=Object.values(pb).reduce((x,v)=>x+v,0),
+sp=m=>{const o={};S.tx.forEach(t=>{if(t.type=='gasto'&&t.date.startsWith(m))o[t.cat]=(o[t.cat]||0)+netAmt(t)});return o},pa=sp(A),pb=sp(B),ta=Object.values(pa).reduce((x,v)=>x+v,0),tb=Object.values(pb).reduce((x,v)=>x+v,0),
 dc=[...new Set([...Object.keys(pa),...Object.keys(pb)])].map(c=>[c,(pa[c]||0),(pb[c]||0)]).sort((p,q)=>Math.abs(q[2]-q[1])-Math.abs(p[2]-p[1]));
 return `<h2 style="margin-top:4px">Historial de gastos e ingresos</h2><div class="two"><div><label>Año</label><select onchange="gset('y',this.value)">${o2([['','Todos'],...years.map(y=>[y,y])],G.y)}</select></div><div><label>Mes</label><select onchange="gset('m',this.value)">${o2([['','Todos'],...MF.map((n,i)=>[p2(i+1),n])],G.m)}</select></div></div>
 <div class="hero"><small>Balance · ${lb}</small><b>${f(inc-tot)}</b><small>Ingresos − gastos (las transferencias no se cuentan)</small></div>
 <div class="grid"><div class="card"><small>Total gastado</small><b class="r">${f(tot)}</b></div><div class="card"><small>Total ingresado</small><b class="g">${f(inc)}</b></div><div class="card"><small>Total ahorrado</small><b>${f(sav)}</b></div><div class="card"><small>Cantidad de gastos</small><b>${gs.length}</b></div><div class="card"><small>Cantidad de ingresos</small><b>${sel.filter(t=>t.type=='ingreso').length}</b></div><div class="card"><small>Promedio de ingreso</small><b>${f(sel.filter(t=>t.type=='ingreso').length?inc/sel.filter(t=>t.type=='ingreso').length:0)}</b></div>
-<div class="card"><small>Promedio de gasto</small><b>${f(gs.length?tot/gs.length:0)}</b></div><div class="card"><small>Mayor gasto</small><b>${f(big?big.amount:0)}</b>${big?`<small>${esc(big.desc||cn(big.cat))} · ${fd(big.date)}</small>`:''}</div></div>
+<div class="card"><small>Promedio de gasto</small><b>${f(gs.length?tot/gs.length:0)}</b></div><div class="card"><small>Mayor gasto</small><b>${f(big?netAmt(big):0)}</b>${big?`<small>${esc(big.desc||cn(big.cat))} · ${fd(big.date)}</small>`:''}</div></div>
 <div class="card"><b>Gastos por categoría</b><small style="margin-bottom:6px">Tocá una categoría para ver sus subcategorías</small><div class="tb h"><span>Categoría</span><span>Total</span><span>%</span><span>Mov.</span></div>
 ${rows.length?rows.map(([c,o],i)=>`<div onclick="gtog('${c}')"><div class="tb"><span>${esc(cn(c))} ${G.o==c?'▴':'▾'}</span><b style="font-size:14px">${f(o.v)}</b><span>${Math.round(o.v/tot*100)}%</span><span>${o.n}</span></div><div class="bar" style="margin:0 0 4px"><i style="width:${o.v/tot*100}%;background:${PAL[i%9]}"></i></div>${G.o==c?Object.entries(o.s).sort((p,q)=>q[1]-p[1]).map(([s,v])=>`<div class="sub"><span>${esc(nm((S.cats.find(x=>x.id==c)||{subs:[]}).subs,s)=='—'?'Sin subcategoría':nm(S.cats.find(x=>x.id==c).subs,s))}</span><span>${f(v)}</span></div>`).join(''):''}</div>`).join(''):'<small>Sin gastos en este período</small>'}</div>
 <div class="card"><b>Ingresos por categoría</b><small style="margin-bottom:6px">Tocá una categoría para ver sus subcategorías</small><div class="tb h"><span>Categoría</span><span>Total</span><span>%</span><span>Mov.</span></div>
