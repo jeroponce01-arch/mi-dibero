@@ -13,8 +13,6 @@ function cleanDefaultCats(){S.cats=(Array.isArray(S.cats)?S.cats:[]).filter(c=>!
 cleanDefaultCats();
 if(!S.sube||typeof S.sube!=='object')S.sube={fare:0,trips:[]};
 if(!Array.isArray(S.sube.trips))S.sube.trips=[];
-function ensureSubeCategory(){let c=S.cats.find(x=>String(x.name||'').trim().toLowerCase()=='sube');if(!c){c={id:'sube',name:'SUBE',subs:[],budget:0};S.cats.push(c)}S.sube.catId=c.id;return c}
-ensureSubeCategory();
 const save=()=>localStorage.setItem(K,JSON.stringify(S));
 const f=n=>{const r=Math.round((+n||0)*100)/100,[i,d]=Math.abs(r).toFixed(2).split('.');return(r<0?'-':'')+S.cur+i.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+d};
 const fi=n=>n?String(n).replace('.',','):'';
@@ -50,8 +48,9 @@ function toggleTheme(){const d=matchMedia('(prefers-color-scheme: dark)').matche
 const sheet=h=>{$('#sheet').innerHTML=h;document.body.classList.add('open')},closeSheet=()=>document.body.classList.remove('open');
 function numSheet(t,v,cb,l){CB=cb;sheet(`<h3>${esc(t)}</h3><label>${l||'Monto'}</label><input id="ns" class="big" type="text" inputmode="decimal" value="${fi(v)}"><button class="btn" onclick="CB(num('ns'));closeSheet()">Guardar</button>`)}
 
-// Detecta cargas SUBE tanto por el ID actual de categoría como por nombres guardados en versiones anteriores.
-const isSubeTx=t=>{if(String(t.type||'').toLowerCase()!=='gasto')return false;const raw=String(t.cat??'').trim().toLowerCase();if(raw==='sube')return true;const c=S.cats.find(x=>String(x.id)===String(t.cat));return String(c?.name||'').trim().toLowerCase()==='sube'};
+// Una carga SUBE se registra como Gasto > Transporte > SUBE (subcategoría).
+const normName=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+const isSubeTx=t=>{if(String(t.type||'').toLowerCase()!=='gasto')return false;const c=S.cats.find(x=>String(x.id)===String(t.cat));if(!c||normName(c.name)!=='transporte')return false;const sub=(c.subs||[]).find(x=>String(x.id)===String(t.sub));return !!sub&&normName(sub.name)==='sube'};
 const subeTopups=()=>S.tx.filter(isSubeTx).reduce((a,t)=>a+netAmt(t),0);
 const subeSpent=()=>S.sube.trips.filter(t=>t.used).reduce((a,t)=>a+(+t.fare||0),0);
 const subeBalance=()=>subeTopups()-subeSpent();
@@ -60,7 +59,7 @@ function subeAddTrip(){if(!(+S.sube.fare>0))return alert('Primero configurá el 
 function subeToggle(id,used){const t=S.sube.trips.find(x=>x.id==id);if(!t)return;if(used){if(!(+t.fare>0))return alert('El precio de este viaje no es válido.');if(subeBalance()<t.fare)return alert('No tenés saldo suficiente en la SUBE para este viaje.');t.used=true}else t.used=false;save();render()}
 function subeDeleteTrip(id){const t=S.sube.trips.find(x=>x.id==id);if(!t)return;if(confirm('¿Eliminar este viaje del registro?')){S.sube.trips=S.sube.trips.filter(x=>x.id!=id);save();render()}}
 views.sube=()=>{const m=mk0(),trips=S.sube.trips.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))),monthTrips=trips.filter(t=>String(t.date||'').startsWith(m)),monthSpent=monthTrips.filter(t=>t.used).reduce((a,t)=>a+(+t.fare||0),0),monthCount=monthTrips.filter(t=>t.used).length;
-return `<div class="hero"><small>Saldo disponible en SUBE</small><b>${f(subeBalance())}</b><small>Las cargas se toman de tus gastos con categoría SUBE.</small></div>
+return `<div class="hero"><small>Saldo disponible en SUBE</small><b>${f(subeBalance())}</b><small>Las cargas se suman cuando registrás un gasto en Transporte → SUBE.</small></div>
 <div class="grid"><div class="card"><small>Viajes usados este mes</small><b>${monthCount}</b></div><div class="card"><small>Gastado este mes</small><b class="r">${f(monthSpent)}</b></div></div>
 <div class="card"><b>Precio por viaje</b><small>Podés cambiarlo cuando aumente el boleto. Los viajes anteriores conservan su precio original.</small><div class="row" style="margin:10px 0 0;align-items:center"><input id="sube_fare" type="text" inputmode="decimal" value="${fi(S.sube.fare)}" placeholder="Precio del boleto" style="margin:0;flex:1"><button class="btn" style="width:auto;margin:0;padding:14px 18px" onclick="subeFareSave()">Guardar</button></div></div>
 <div class="row" style="justify-content:space-between;margin:18px 0 8px"><h2 style="margin:0">Registro de viajes</h2><button class="btn" style="width:auto;margin:0;padding:11px 14px" onclick="subeAddTrip()">＋ Viaje</button></div>
@@ -297,11 +296,11 @@ function drawCat(){sheet(`<h3>${CE.isNew?'Nueva':'Editar'} categoría</h3><label
 <button class="btn sec" onclick="CE.subs.push({id:uid(),name:''});drawCat()">+ Agregar subcategoría</button><button class="btn" onclick="saveCat()">Guardar</button>${CE.fixed?'<small style="margin-top:10px">Categoría predeterminada: no se puede renombrar ni eliminar. Podés agregar subcategorías propias.</small>':''}${CE.isNew||CE.fixed?'':'<button class="btn sec" onclick="mvForm(\''+CE.id+'\')">Mover sus movimientos a otra categoría</button><button class="btn del" onclick="delCat()">Eliminar categoría</button>'}`)}
 function saveCat(){CE.name=CE.name.trim();if(!CE.name)return alert('Poné un nombre');CE.subs=CE.subs.filter(s=>s.name.trim());const isNew=CE.isNew;delete CE.isNew;
 if(isNew)S.cats.push(CE);else S.cats[S.cats.findIndex(c=>c.id==CE.id)]=CE;save();closeSheet();render()}
-function delCat(){if(CE.id==S.sube.catId)return alert('La categoría SUBE es necesaria para calcular las cargas de la tarjeta y no se puede eliminar.');if(confirm('¿Eliminar categoría? Los movimientos quedarán "Sin categoría".')){S.cats=S.cats.filter(c=>c.id!=CE.id);save();closeSheet();render()}}
+function delCat(){if(confirm('¿Eliminar categoría? Los movimientos quedarán "Sin categoría".')){S.cats=S.cats.filter(c=>c.id!=CE.id);save();closeSheet();render()}}
 function exp_(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='mi-dinero-'+today()+'.json';a.click()}
 function imp(e){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts||!d.cats||!d.tx)throw 0;
-if(confirm('Esto reemplaza los datos de movimientos, cuentas y categorías. Las inversiones y metas actuales se conservarán si la copia no las contiene. ¿Continuar?')){const oldInv=Array.isArray(S.investments)?S.investments:[];const oldGoals=Array.isArray(S.goals)?S.goals:[];S={...def(),...d,investments:Array.isArray(d.investments)?d.investments:oldInv,goals:Array.isArray(d.goals)?d.goals:oldGoals};cleanDefaultCats();if(!S.sube||typeof S.sube!=='object')S.sube={fare:0,trips:[]};if(!Array.isArray(S.sube.trips))S.sube.trips=[];ensureSubeCategory();save();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
-function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();S.sube={fare:0,trips:[]};ensureSubeCategory();save();render()}}
+if(confirm('Esto reemplaza los datos de movimientos, cuentas y categorías. Las inversiones y metas actuales se conservarán si la copia no las contiene. ¿Continuar?')){const oldInv=Array.isArray(S.investments)?S.investments:[];const oldGoals=Array.isArray(S.goals)?S.goals:[];S={...def(),...d,investments:Array.isArray(d.investments)?d.investments:oldInv,goals:Array.isArray(d.goals)?d.goals:oldGoals};cleanDefaultCats();if(!S.sube||typeof S.sube!=='object')S.sube={fare:0,trips:[]};if(!Array.isArray(S.sube.trips))S.sube.trips=[];save();render();alert('Copia importada correctamente')}}catch(x){alert('El archivo no es una copia válida')}};r.readAsText(e.target.files[0])}
+function wipe(){if(confirm('¿Eliminar TODOS tus datos? No se puede deshacer.')&&confirm('¿Seguro? Se borrará todo.')){S=def();S.sube={fare:0,trips:[]};save();render()}}
 /* ===== Importar movimientos desde Excel (hoja AGENDA) ===== */
 const nz=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 let XI=null;
