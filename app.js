@@ -50,7 +50,9 @@ function toggleTheme(){const d=matchMedia('(prefers-color-scheme: dark)').matche
 const sheet=h=>{$('#sheet').innerHTML=h;document.body.classList.add('open')},closeSheet=()=>document.body.classList.remove('open');
 function numSheet(t,v,cb,l){CB=cb;sheet(`<h3>${esc(t)}</h3><label>${l||'Monto'}</label><input id="ns" class="big" type="text" inputmode="decimal" value="${fi(v)}"><button class="btn" onclick="CB(num('ns'));closeSheet()">Guardar</button>`)}
 
-const subeTopups=()=>S.tx.filter(t=>t.type=='gasto'&&t.cat==S.sube.catId).reduce((a,t)=>a+netAmt(t),0);
+// Detecta cargas SUBE tanto por el ID actual de categoría como por nombres guardados en versiones anteriores.
+const isSubeTx=t=>{if(String(t.type||'').toLowerCase()!=='gasto')return false;const raw=String(t.cat??'').trim().toLowerCase();if(raw==='sube')return true;const c=S.cats.find(x=>String(x.id)===String(t.cat));return String(c?.name||'').trim().toLowerCase()==='sube'};
+const subeTopups=()=>S.tx.filter(isSubeTx).reduce((a,t)=>a+netAmt(t),0);
 const subeSpent=()=>S.sube.trips.filter(t=>t.used).reduce((a,t)=>a+(+t.fare||0),0);
 const subeBalance=()=>subeTopups()-subeSpent();
 function subeFareSave(){const v=Math.round(Math.max(0,pnum($('#sube_fare').value))*100)/100;if(v<=0)return alert('Ingresá un precio de viaje mayor a 0');S.sube.fare=v;save();render()}
