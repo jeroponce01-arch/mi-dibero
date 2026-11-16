@@ -31,3 +31,6 @@ label{font-size:13px;color:var(--m);display:block;margin:8px 0 4px}.big{font-siz
 .tb{display:grid;grid-template-columns:1fr auto 40px 30px;gap:6px;align-items:center;font-size:14px;padding:10px 0;border-top:1px solid var(--b)}.tb.h{font-size:11px;color:var(--m);border:0;padding:0 0 6px}.tb>:nth-child(n+2){text-align:right}.sub{display:flex;justify-content:space-between;padding:6px 0 6px 14px;font-size:13px;color:var(--m)}.scroll{overflow-x:auto}
 
 .month-values{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:112px}.month-values b{font-size:14px}.month-delta{width:44px;text-align:right}.month-row .fl small{line-height:1.35}
+
+/* Módulo SUBE */
+nav{overflow-x:auto;justify-content:flex-start}nav button{flex:1 0 68px;min-width:68px}.sube-trip{padding:8px 0;border-bottom:1px solid var(--b);margin:0}.sube-trip:last-child{border-bottom:0}.sube-check{display:flex;align-items:center;gap:10px;flex:1;margin:0;color:var(--t);font-size:14px}.sube-check input{width:23px;height:23px;min-width:23px;margin:0;accent-color:var(--p)}.sube-check span{display:block}.sube-check b{font-size:15px}
